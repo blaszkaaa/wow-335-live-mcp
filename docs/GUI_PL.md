@@ -1,7 +1,7 @@
 # WoW MCP Control Center — instrukcja (Windows)
 
 Gra: World of Warcraft 3.3.5a (w tym klient 12340).
-Interfejs aplikacji jest po polsku.
+Interfejs aplikacji jest po polsku. Od wersji UI 2.0 korzysta z CustomTkinter: ciemne tło, zaokrąglone karty, czytelne paski postępu i wygodniejsza nawigacja.
 
 ## Instalacja aplikacji
 
@@ -10,7 +10,7 @@ Interfejs aplikacji jest po polsku.
    **WoW-MCP-Control-Center-Windows-x86-bridge.zip**.
 3. Uruchom **WoW-MCP-Control-Center.exe**. Nie trzeba instalować Pythona.
 4. Otwórz **Ustawienia → Wybierz katalog WoW** i wskaż folder zawierający Wow.exe.
-5. Otwórz **Przegląd**.
+5. Otwórz **Przegląd**. Nowe zakładki: **Postać**, **Zadania**, **Ekwipunek**, **Diagnostyka**, **Ustawienia**.
 
 ## Odczyt prawdziwych danych z gry już teraz
 
@@ -20,7 +20,10 @@ Interfejs aplikacji jest po polsku.
 - Aplikacja pokaże prawdziwe dane postaci, questy i statystyki, jeżeli uda się
   odczytać kompletną ramkę transmisji. Odczyt jest wykonywany na żądanie, nie
   automatycznie co sekundę. Po 60 sekundach dane przestają być oznaczane jako aktualne.
-- W **Zadaniach** zobaczysz cele questów, a w **Postaci** szczegóły bohatera.
+- W **Zadaniach** działa wyszukiwanie w tytułach i celach oraz filtry **Wszystkie / Gotowe / W toku**.
+- W **Postaci** zobaczysz czytelne paski HP, mocy i doświadczenia, a w **Ekwipunku** przedmioty z toreb i założone elementy.
+- **Ustawienia → Automatyczny odczyt** pozwalają włączyć odświeżanie co 30 sekund. Domyślnie jest wyłączone, ponieważ przechwytywanie obrazu może chwilowo aktywować okno WoW.
+- Skrót **Ctrl+R** wykonuje ręczny odczyt.
 
 To jest obecny, sprawdzony transport przez piksele, a nie transport DLL.
 
@@ -28,7 +31,7 @@ To jest obecny, sprawdzony transport przez piksele, a nie transport DLL.
 
 Kliknij **Wyślij demo DLL**. Dołączony program demonstracyjny wysyła przykładowy
 snapshot przez natywną bibliotekę DLL do named pipe, a aplikacja pokazuje postać
-"Demo". Ten test sprawdza tylko transport. NIE przedstawia aktualnego stanu gry.
+"Demo". Ten test sprawdza tylko transport. NIE przedstawia aktualnego stanu gry. Jeśli masz równocześnie świeże dane z prawdziwego addonu i demonstracyjny pakiet DLL, interfejs wybierze dane z gry.
 
 ## ChatGPT + GUI
 
