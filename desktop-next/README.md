@@ -3,6 +3,22 @@
 Nowy interfejs Windows bazuje na **Tauri 2, React i TypeScript**, zamiast
 Tkinter. Obsługuje systemowy WebView2 oraz usługę Python działającą lokalnie.
 
+## Poprawki stabilności i skalowania (v0.3.1)
+
+- Kompilacja release Tauri korzysta z podsystemu okienkowego Windows,
+  więc nie otwiera dodatkowej konsoli CMD obok aplikacji.
+- Pomocnicze sprawdzanie procesu `Wow.exe` uruchamia `tasklist` bez
+  widocznego okna i wykonuje to asynchronicznie, z cache co 8 sekund.
+- W **Ustawienia → Skalowanie interfejsu** można wybrać **80–140%**.
+  Preferencja zapamiętuje się na tym komputerze.
+- Skróty: **Ctrl++**, **Ctrl+-**, **Ctrl+0** (przywrócenie 100%).
+- Responsywny układ działa również w mniejszym oknie; minimalny rozmiar
+  okna zmniejszono, aby działało lepiej przy 125–150% DPI Windows.
+- Interfejs korzysta z czcionek systemowych w trybie offline.
+
+Zmiany w kodzie wymagają ponownej instalacji **nowego EXE z GitHub Actions**;
+stary instalator nie otrzyma poprawek samodzielnie.
+
 ## Możliwości
 
 - Przegląd z kartą postaci, statystykami, zadaniami i paskami HP / XP.
