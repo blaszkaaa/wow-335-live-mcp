@@ -14,6 +14,7 @@ import numpy as np
 from PIL import ImageGrab
 
 from native_bridge.pipe import NativePipeReceiver
+from native_bridge.hub import NativeHubClient
 
 
 GAME_DIR = os.environ.get("WOW_GAME_DIR")
@@ -436,6 +437,15 @@ _NATIVE_RECEIVER = None
 
 
 def wow_native_status():
+    # Prefer the GUI-hosted hub so the telemetry pipe has only one owner.
+    hub = NativeHubClient.discover()
+    if hub is not None:
+        remote = hub.status()
+        if remote is not None:
+            return {**remote, "transport": "desktop_gui_hub"}
+    if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
+        return {"available": False, "enabled": True,
+                "reason": "GUI not running or not reachable; start desktop_app.py."}
     if _NATIVE_RECEIVER is None:
         return {"available": False, "enabled": False,
                 "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
@@ -443,6 +453,14 @@ def wow_native_status():
 
 
 def read_wow_native_data():
+    hub = NativeHubClient.discover()
+    if hub is not None:
+        remote = hub.snapshot()
+        if remote is not None:
+            return {**remote, "transport": "desktop_gui_hub"}
+    if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
+        return {"available": False, "enabled": True, "data": None,
+                "reason": "GUI not running or not reachable; start desktop_app.py."}
     if _NATIVE_RECEIVER is None:
         return {"available": False, "enabled": False,
                 "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
@@ -521,9 +539,11 @@ def reply(req):
 
 def main():
     global _NATIVE_RECEIVER
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1":
-        _NATIVE_RECEIVER = NativePipeReceiver()
-        _NATIVE_RECEIVER.start()
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1" and os.environ.get("WOW_MCP_NATIVE_HUB") != "1":
+        hub = NativeHubClient.discover()
+        if hub is None or hub.status() is None:
+            _NATIVE_RECEIVER = NativePipeReceiver()
+            _NATIVE_RECEIVER.start()
     for line in sys.stdin:
         try:
             response = reply(json.loads(line))
