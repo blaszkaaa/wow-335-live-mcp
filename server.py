@@ -473,6 +473,20 @@ def read_wow_native_data():
     return _NATIVE_RECEIVER.snapshot()
 
 
+def read_best_wow_live_data():
+    """Use fresh native addon telemetry first; fall back to the visual strip.
+
+    A manually launched stand-alone native demo sender must never be treated
+    as real character data by the default gameplay-advice tool.
+    """
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1":
+        native = read_wow_native_data()
+        if (native.get("available") and native.get("session") != "native-demo"
+                and isinstance(native.get("data"), dict)):
+            return native
+    return live_game_data()
+
+
 TOOLS = [
     {"name": "wow_status", "description": "Check whether the local WoW 3.3.5a window is ready for an on-demand screenshot. Read-only.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -529,7 +543,7 @@ def reply(req):
             elif name == "read_wow_native_data":
                 result = {"content": [{"type": "text", "text": json.dumps(read_wow_native_data(), ensure_ascii=False)}]}
             elif name == "read_wow_live_data":
-                result = {"content": [{"type": "text", "text": json.dumps(live_game_data(), ensure_ascii=False)}]}
+                result = {"content": [{"type": "text", "text": json.dumps(read_best_wow_live_data(), ensure_ascii=False)}]}
             elif name == "capture_wow":
                 result = {"content": [capture()]}
             else:
