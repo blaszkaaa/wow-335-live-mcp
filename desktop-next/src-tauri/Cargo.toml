@@ -1,6 +1,6 @@
 [package]
 name = "wow-mcp-control-center"
-version = "0.3.1"
+version = "0.4.0"
 description = "Native Windows Control Center for WoW 3.3.5a live MCP"
 authors = ["WoW MCP contributors"]
 edition = "2021"
