@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 from PIL import ImageGrab
 
+from native_bridge.pipe import NativePipeReceiver
+
 
 GAME_DIR = os.environ.get("WOW_GAME_DIR")
 GAME = Path(GAME_DIR).expanduser().resolve() if GAME_DIR else None
@@ -430,8 +432,31 @@ def live_game_data(timeout_seconds=20):
     return {"available": False, "reason": "Nie udało się odczytać paska danych. Sprawdź, czy WoWMCPData jest włączony i użyj /reload w grze."}
 
 
+_NATIVE_RECEIVER = None
+
+
+def wow_native_status():
+    if _NATIVE_RECEIVER is None:
+        return {"available": False, "enabled": False,
+                "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
+    return _NATIVE_RECEIVER.status()
+
+
+def read_wow_native_data():
+    if _NATIVE_RECEIVER is None:
+        return {"available": False, "enabled": False,
+                "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
+    return _NATIVE_RECEIVER.snapshot()
+
+
 TOOLS = [
     {"name": "wow_status", "description": "Check whether the local WoW 3.3.5a window is ready for an on-demand screenshot. Read-only.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+     "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+    {"name": "wow_native_status", "description": "Experimental native named-pipe receiver status. Opt in with WOW_MCP_NATIVE_BRIDGE=1. No game hook or DLL injection is included.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+     "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+    {"name": "read_wow_native_data", "description": "Read the most recent validated snapshot from an experimental local DLL pipe. Unavailable if the receiver is disabled or the frame is stale (>30s). Not connected to game Lua yet.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
     {"name": "capture_wow", "description": "Capture one screenshot of the WoW window rectangle on user request. Briefly brings WoW forward and restores the previous window. Does not control the character. Other windows overlapping the rectangle can appear in the image.",
@@ -475,6 +500,10 @@ def reply(req):
                 result = {"content": [{"type": "text", "text": json.dumps(game_data(), ensure_ascii=False)}]}
             elif name == "read_wow_combat_log":
                 result = {"content": [{"type": "text", "text": json.dumps(combat_log(req.get("params", {}).get("arguments", {}).get("max_lines", 40)), ensure_ascii=False)}]}
+            elif name == "wow_native_status":
+                result = {"content": [{"type": "text", "text": json.dumps(wow_native_status(), ensure_ascii=False)}]}
+            elif name == "read_wow_native_data":
+                result = {"content": [{"type": "text", "text": json.dumps(read_wow_native_data(), ensure_ascii=False)}]}
             elif name == "read_wow_live_data":
                 result = {"content": [{"type": "text", "text": json.dumps(live_game_data(), ensure_ascii=False)}]}
             elif name == "capture_wow":
@@ -491,6 +520,10 @@ def reply(req):
 
 
 def main():
+    global _NATIVE_RECEIVER
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1":
+        _NATIVE_RECEIVER = NativePipeReceiver()
+        _NATIVE_RECEIVER.start()
     for line in sys.stdin:
         try:
             response = reply(json.loads(line))
