@@ -40,6 +40,12 @@ The addon publishes a message shaped as follows:
       }
     }
 
+Snapshoty natywne są odświeżane przez addon mniej więcej co 3 sekundy,
+niezależnie od czasu transmisji wszystkich stron paska wizualnego.
+Po ustawieniu WOW_MCP_NATIVE_BRIDGE=1 standardowe narzędzie MCP
+read_wow_live_data preferuje świeże dane DLL, jeśli są dostępne, i inaczej
+korzysta z odczytu wizualnego. Dane demonstracyjne DLL są pomijane w tej ścieżce.
+
 A packet is limited to 60000 bytes. When character snapshots exceed about
 58000 bytes, low-priority sections are removed with truncation markers.
 Packets are always full snapshots to tolerate lost frames. Sending uses
