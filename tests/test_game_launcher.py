@@ -55,8 +55,8 @@ class GameLauncherTests(TestCase):
             fake = Mock()
             launch_wow(game, process_factory=fake)
             args, kwargs = fake.call_args
-            self.assertEqual(args[0], [str(game / "Wow.exe")])
-            self.assertEqual(kwargs["cwd"], str(game))
+            self.assertEqual(args[0], [str((game / "Wow.exe").resolve())])
+            self.assertEqual(kwargs["cwd"], str(game.resolve()))
             self.assertEqual(kwargs["creationflags"], 0 if __import__("os").name != "nt"
                              else __import__("subprocess").CREATE_NO_WINDOW)
 
