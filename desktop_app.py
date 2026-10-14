@@ -13,11 +13,12 @@ from pathlib import Path
 import queue
 import subprocess
 import sys
+import time
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
-from native_bridge.hub import NativeHubServer
+from native_bridge.hub import DISCOVERY_FILE, NativeHubServer
 from native_bridge.pipe import NativePipeReceiver
 
 BG = "#0D1119"
@@ -44,6 +45,8 @@ def time_label(timestamp):
 def source_label(snapshot):
     if not snapshot.get("available"):
         return "Brak świeżych danych"
+    if snapshot.get("source") == "WoW addon visual data strip":
+        return "Odczyt z addonu WoW — na żądanie"
     if snapshot.get("data", {}).get("character", {}).get("name") == "Demo":
         return "Dane demonstracyjne — NIE z WoW"
     return "Dane z eksperymentalnego kanału DLL"
@@ -65,6 +68,11 @@ class ControlCenter(tk.Tk):
         self.section = "Przegląd"
         self._game_status = {"game_running": False, "game_installed": False}
         self._result_queue = queue.Queue()
+        self._config_path = DISCOVERY_FILE.parent / "settings.json"
+        self._game_dir = os.environ.get("WOW_GAME_DIR", "")
+        self._load_settings()
+        self._visual = None
+        self._visual_busy = False
 
         style = ttk.Style(self)
         style.theme_use("clam")
@@ -194,8 +202,10 @@ class ControlCenter(tk.Tk):
         self.overview_status.pack(anchor="w", pady=(14, 10))
         buttons = tk.Frame(inside, bg=PANEL)
         buttons.pack(anchor="w", pady=(10, 0))
-        self._button(buttons, "Wyślij dane testowe", self._run_demo, True).pack(side="left")
-        self._button(buttons, "Sprawdź uruchomienie WoW", self._check_game_async).pack(
+        self._button(buttons, "Odczytaj WoW z addonu", self._read_visual, True).pack(side="left")
+        self._button(buttons, "Wyślij demo DLL", self._run_demo).pack(
+            side="left", padx=(10, 0))
+        self._button(buttons, "Sprawdź WoW", self._check_game_async).pack(
             side="left", padx=(10, 0))
 
         log_frame, log_inner = self._card(self.content, 18)
@@ -249,13 +259,16 @@ class ControlCenter(tk.Tk):
         self._text(inside, "GUI obsługuje DLL, a ChatGPT odczytuje stan przez lokalny hub.",
                    color=MUTED, wraplength=660).pack(anchor="w", pady=(12, 16))
         self._text(inside, "W konfiguracji serwera MCP ustaw:", color=FG).pack(anchor="w")
-        self._text(inside, "WOW_MCP_NATIVE_BRIDGE=1", color=ACCENT, size=13,
-                   bold=True).pack(anchor="w", pady=(10, 10))
+        self._text(inside, "WOW_MCP_NATIVE_BRIDGE=1  /  WOW_MCP_NATIVE_HUB=1",
+                   color=ACCENT, size=12, bold=True).pack(anchor="w", pady=(10, 10))
         self._button(inside, "Kopiuj zmienną środowiskową",
                      self._copy_config, True).pack(anchor="w", pady=(7, 0))
         other, inner = self._card(self.content, 22)
         other.pack(fill="x", pady=(19, 0))
-        self._text(inner, "Informacje", size=16, bold=True).pack(anchor="w")
+        self._text(inner, "Folder gry", size=16, bold=True).pack(anchor="w")
+        self._button(inner, "Wybierz katalog WoW", self._browse_game).pack(
+            anchor="w", pady=(12, 8))
+        self._text(inner, "Informacje", size=14, bold=True).pack(anchor="w", pady=(12, 0))
         self.settings_info = self._text(inner, "", color=MUTED, size=10,
                                         justify="left", wraplength=650)
         self.settings_info.pack(anchor="w", pady=(12, 4))
@@ -273,13 +286,68 @@ class ControlCenter(tk.Tk):
 
     def _copy_config(self):
         self.clipboard_clear()
-        self.clipboard_append("WOW_MCP_NATIVE_BRIDGE=1")
+        self.clipboard_append("WOW_MCP_NATIVE_BRIDGE=1\nWOW_MCP_NATIVE_HUB=1")
         self._log("Skopiowano konfigurację MCP.")
 
     def _log(self, text):
         time = datetime.datetime.now().strftime("%H:%M:%S")
         self.messages.insert(0, f"[{time}] {text}")
         del self.messages[100:]
+
+    def _load_settings(self):
+        if self._game_dir:
+            return
+        try:
+            config = json.loads(self._config_path.read_text(encoding="utf-8"))
+            candidate = config.get("game_dir", "")
+            if isinstance(candidate, str):
+                self._game_dir = candidate
+                if candidate:
+                    os.environ["WOW_GAME_DIR"] = candidate
+        except (OSError, ValueError):
+            pass
+
+    def _browse_game(self):
+        directory = filedialog.askdirectory(
+            parent=self, title="Wybierz katalog zawierający Wow.exe",
+            initialdir=self._game_dir or str(Path.home()))
+        if not directory:
+            return
+        if not (Path(directory) / "Wow.exe").is_file():
+            messagebox.showerror("Nieprawidłowy folder",
+                "Wybierz folder, w którym znajduje się Wow.exe.", parent=self)
+            return
+        self._game_dir = directory
+        os.environ["WOW_GAME_DIR"] = directory
+        self._config_path.parent.mkdir(parents=True, exist_ok=True)
+        self._config_path.write_text(
+            json.dumps({"game_dir": directory}, ensure_ascii=False),
+            encoding="utf-8")
+        self._log("Ustawiono folder gry: " + directory)
+        self._check_game_async()
+        self._show("Ustawienia")
+
+    def _read_visual(self):
+        if self._visual_busy:
+            self._log("Odczyt z addonu już trwa.")
+            return
+        if not self._game_dir or not (Path(self._game_dir) / "Wow.exe").is_file():
+            messagebox.showinfo("Folder WoW",
+                "Najpierw wybierz folder zawierający Wow.exe w Ustawieniach.",
+                parent=self)
+            self._show("Ustawienia")
+            return
+        self._visual_busy = True
+        self._log("Odczyt danych z widocznego paska addonu...")
+        def worker():
+            try:
+                import server
+                server.GAME = Path(self._game_dir).expanduser().resolve()
+                result = server.live_game_data()
+            except Exception as exc:
+                result = {"available": False, "reason": str(exc)}
+            self._result_queue.put(("visual", result))
+        threading.Thread(target=worker, name="wow-visual-read", daemon=True).start()
 
     def _run_demo(self):
         directory = (Path(sys.executable).resolve().parent
@@ -333,8 +401,18 @@ class ControlCenter(tk.Tk):
                 self._log("WoW uruchomiony: " + ("tak" if value["game_running"] else "nie"))
             elif kind == "log":
                 self._log(value)
+            elif kind == "visual":
+                self._visual_busy = False
+                self._visual = value if value.get("available") else None
+                self._log("Odczyt addonu zakończony."
+                          if value.get("available")
+                          else "Odczyt addonu nieudany: " + str(value.get("reason")))
         status = self.receiver.status()
         snapshot = self.receiver.snapshot()
+        if not snapshot["available"] and self._visual and self._visual.get("available"):
+            age = time.time() - self._visual["data"].get("captured_at", 0)
+            if 0 <= age <= 60:
+                snapshot = self._visual
         available = bool(snapshot["available"])
         if available != self.last_available:
             self._log("Odebrano poprawne dane." if available else "Oczekiwanie na świeże dane.")
@@ -418,7 +496,7 @@ class ControlCenter(tk.Tk):
         elif self.section == "Ustawienia":
             self.settings_info.configure(text=
                 "Windows: " + os.name +
-                "\nGra: " + str(os.environ.get("WOW_GAME_DIR") or "nie skonfigurowano WOW_GAME_DIR") +
+                "\nGra: " + str(self._game_dir or "nie skonfigurowano folderu gry") +
                 "\nStatus WoW: " + ("uruchomiony" if self._game_status["game_running"] else "nie wykryto") +
                 "\nLokalny hub: " + ("aktywny" if self.hub._httpd else "wyłączony") +
                 "\nOdbiornik: " + status["pipe"] +
