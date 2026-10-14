@@ -26,7 +26,29 @@ The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip mu
 
 `read_wow_live_data` reports `age_seconds`. Trainer, merchant, gossip, and quest-dialog details are available while the corresponding window is open and for up to 30 seconds afterward. The combat summary describes the latest fight since the addon was loaded; it is not a full combat log. Large snapshots may omit spells, actions, or bags and mark the omitted section with a `*_truncated` flag. The live strip does not include Questie's map database or a complete history of every quest.
 
-## Desktop Control Center 2.0 (experimental)
+## Nowa aplikacja desktopowa (zalecana)
+
+**WoW MCP Control Center 3.0** to aplikacja Windows oparta na **Tauri 2,
+React i TypeScript** zamiast Python/Tkinter. Ma własny spójny system
+projektowy, interfejs w języku polskim, pulpit statystyk i ekrany
+postaci, questów, ekwipunku, ustawień oraz diagnostyki.
+
+Tauri uruchamia usługę Python (PyInstaller sidecar), która nadal obsługuje
+MCP, addon i eksperymentalny kanał DLL. Nie trzeba osobno uruchamiać
+starego GUI w Pythonie. Instalator Windows jest budowany przez workflow
+**Tauri Windows Desktop** na GitHub Actions.
+
+Szczegóły i instrukcja: [desktop-next/README.md](desktop-next/README.md).
+
+**Obecny odczyt gry nadal wykorzystuje addon wizualny. DLL nie jest jeszcze
+podłączona do Lua WoW.** Nie instaluj jej do klienta Warmane.
+
+### Poprzednie GUI (tryb legacy)
+
+Stary interfejs CustomTkinter z pliku desktop_app.py jest pozostawiony
+wyłącznie jako rozwiązanie zapasowe.
+
+## Desktop Control Center 2.0 (legacy / experimental)
 
 The Windows application has a polished dark interface built with
 [CustomTkinter](https://customtkinter.tomschimansky.com/):
