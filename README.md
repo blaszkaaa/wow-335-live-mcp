@@ -26,21 +26,32 @@ The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip mu
 
 `read_wow_live_data` reports `age_seconds`. Trainer, merchant, gossip, and quest-dialog details are available while the corresponding window is open and for up to 30 seconds afterward. The combat summary describes the latest fight since the addon was loaded; it is not a full combat log. Large snapshots may omit spells, actions, or bags and mark the omitted section with a `*_truncated` flag. The live strip does not include Questie's map database or a complete history of every quest.
 
-## Desktop Control Center (experimental)
+## Desktop Control Center 2.0 (experimental)
 
-Run **py -3 desktop_app.py** on Windows to open the Polish-language desktop
-dashboard, view native bridge status, character and quest data, and inspect
-transmission diagnostics. The GUI owns the optional native pipe receiver and
-makes its data available to the MCP server via an authenticated, local-only hub.
+The Windows application has a polished dark interface built with
+[CustomTkinter](https://customtkinter.tomschimansky.com/):
 
-Set **WOW_MCP_NATIVE_BRIDGE=1** and **WOW_MCP_NATIVE_HUB=1** for your MCP
-server and launch the GUI first. A downloadable Windows executable is built
-by GitHub Actions on this PR. Full setup instructions:
-[native_bridge/README.md](native_bridge/README.md).
+- **Przegląd**: hero panel, live status, level, health, ready quests and quick actions.
+- **Postać**: character and realm, health/power/XP progress bars, zone and money.
+- **Zadania**: quest search, "Wszystkie/Gotowe/W toku" filters and progress.
+- **Ekwipunek**: equipped items and bag inventory.
+- **Diagnostyka**: received/rejected packets, data source, errors and event feed.
+- **Ustawienia**: WoW directory, connection configuration and opt-in periodic
+  visual reads every 30 seconds (may briefly foreground WoW).
 
-**Important:** The native DLL transport is a tested stand-alone prototype,
-not a working in-game Lua DLL integration. Visual addon mode remains available
-and unchanged. Game DLL injection/hooking is not included.
+Run from source with **py -3 desktop_app.py**, or download the packaged Windows
+EXE from the GitHub Actions artifact associated with the PR. Documentation in
+Polish: [docs/GUI_PL.md](docs/GUI_PL.md).
+
+The UI owns the optional native pipe and shares status over an authenticated
+127.0.0.1 hub with other MCP processes. Set \`WOW_MCP_NATIVE_BRIDGE=1\`
+and \`WOW_MCP_NATIVE_HUB=1\` in the MCP server environment to enable it.
+
+**Important:** Native pipe transfer is tested independently of the game.
+In-game DLL/Lua integration is **not** implemented. Real WoW data can be
+requested using the existing visual addon; no game DLL injection is needed.
+The experimental DLL should not be loaded into Warmane WoW.exe.
+
 
 ## Requirements
 
