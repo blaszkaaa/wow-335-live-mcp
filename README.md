@@ -26,6 +26,18 @@ The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip mu
 
 `read_wow_live_data` reports `age_seconds`. Trainer, merchant, gossip, and quest-dialog details are available while the corresponding window is open and for up to 30 seconds afterward. The combat summary describes the latest fight since the addon was loaded; it is not a full combat log. Large snapshots may omit spells, actions, or bags and mark the omitted section with a `*_truncated` flag. The live strip does not include Questie's map database or a complete history of every quest.
 
+## Uruchamianie gry bezpośrednio z aplikacji
+
+W nowym **WoW MCP Control Center** wybierz folder z `Wow.exe`, a następnie
+kliknij **Uruchom WoW**. Aplikacja instaluje/aktualizuje oba pliki
+addonu `WoWMCPData`, tworzy kopię zapasową starszej wersji, włącza
+odbiornik MCP i uruchamia grę. Jeśli WoW już działa, nie uruchamia
+drugiej instancji i informuje, czy wymagane jest `/reload`.
+Nowy przycisk i komunikaty są dostępne na pulpicie i w ustawieniach.
+
+DLL nie jest automatycznie ładowana ani wstrzykiwana do klienta
+Warmane; szczegóły wariantu do testów offline poniżej.
+
 ## Opcjonalna integracja Lua → DLL (offline)
 
 Źródło modułu: [WoWMCPNativeLua.cpp](native_bridge/adapter/WoWMCPNativeLua.cpp).
