@@ -19,7 +19,7 @@ jobs:
           cmake -S native_bridge -B build/native-bridge -A Win32
           cmake --build build/native-bridge --config Release
       - name: Check Python syntax
-        run: python -m compileall -q server.py desktop_app.py tests native_bridge
+        run: python -m compileall -q server.py desktop_app.py desktop_app_modern.py ui_models.py tests native_bridge
       - name: Check Lua syntax
         run: |
           python -m pip install 'luaparser>=4,<5'
@@ -29,7 +29,7 @@ jobs:
       - name: Build Windows GUI executable
         run: |
           python -m pip install 'pyinstaller>=6,<7'
-          pyinstaller --noconfirm --clean --onefile --windowed --hidden-import server --add-data "WoWMCPData/WoWMCPData.lua;WoWMCPData" --name WoW-MCP-Control-Center desktop_app.py
+          pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --hidden-import server --add-data "WoWMCPData/WoWMCPData.lua;WoWMCPData" --name WoW-MCP-Control-Center desktop_app.py
           Copy-Item build/native-bridge/Release/WoWMCPNativeBridge.dll dist/
           Copy-Item build/native-bridge/Release/native_bridge_demo.exe dist/
           Copy-Item docs/GUI_PL.md dist/INSTRUKCJA.md
