@@ -591,6 +591,7 @@ local pages = 1
 local checksum = 0
 local elapsed_time = 0
 local refresh_age = 0
+local native_refresh_age = 0
 
 local function compact_items(items)
     local result = array()
@@ -729,7 +730,6 @@ end
 
 local function refresh_payload()
     collect()
-    publish_native()
     generation = (generation + 1) % 256
     local live = {
         wire_version = 3,
@@ -799,6 +799,13 @@ end
 panel:SetScript("OnUpdate", function(_, elapsed)
     elapsed_time = elapsed_time + elapsed
     refresh_age = refresh_age + elapsed
+    native_refresh_age = native_refresh_age + elapsed
+    -- Native snapshots do not wait for all pages of the legacy visual strip.
+    if native_refresh_age >= 3 and native_available() then
+        native_refresh_age = 0
+        collect()
+        publish_native()
+    end
     if elapsed_time < 0.18 then return end
     elapsed_time = 0
     page = page + 1
