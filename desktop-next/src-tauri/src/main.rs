@@ -19,6 +19,7 @@ async fn backend_api(action: String, payload: Option<Value>) -> Result<Value, St
         "dashboard" => ("/v2/dashboard", false),
         "get_settings" => ("/v2/settings", false),
         "refresh" => ("/v2/refresh", true),
+        "launch" => ("/v2/launch", true),
         "demo" => ("/v2/demo", true),
         "set_settings" => ("/v2/settings", true),
         _ => return Err("Unsupported desktop API action".to_string()),
