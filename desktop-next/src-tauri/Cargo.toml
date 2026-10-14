@@ -1,0 +1,17 @@
+[package]
+name = "wow-mcp-control-center"
+version = "0.3.0"
+description = "Native Windows Control Center for WoW 3.3.5a live MCP"
+authors = ["WoW MCP contributors"]
+edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

@@ -591,6 +591,7 @@ local pages = 1
 local checksum = 0
 local elapsed_time = 0
 local refresh_age = 0
+local native_refresh_age = 0
 
 local function compact_items(items)
     local result = array()
@@ -649,6 +650,82 @@ local function compact_quests(quests)
         }
     end
     return result
+end
+
+-- Native bridge is optional. It exists only when a compatible, user-approved
+-- WrathClassicAPI extension has registered WoWMCP.Publish in Lua.
+-- The original visual strip remains a full fallback.
+local native_session = tostring(time()) .. "-" .. tostring(math.random(1000, 999999))
+local native_sequence = 0
+local native_last_ok = false
+local native_last_bytes = 0
+
+local function native_available()
+    return type(WoWMCP) == "table" and type(WoWMCP.Publish) == "function"
+end
+
+local function publish_native()
+    if not native_available() then return end
+
+    -- Keep the native payload human-readable, unlike the compact strip wire.
+    local data = encode(export, false)
+    if #data > 58000 then
+        local slim = {
+            captured_at = export.captured_at,
+            character = export.character,
+            location = export.location,
+            target = export.target,
+            pet = export.pet,
+            quests = export.quests,
+            quest_log = export.quest_log,
+            bags = export.bags,
+            equipment = export.equipment,
+            stats = export.stats,
+            talents = export.talents,
+            group = export.group,
+            interaction = export.interaction,
+            combat_summary = export.combat_summary,
+            spells_truncated = true,
+            actions_truncated = true,
+            skills_truncated = true,
+        }
+        data = encode(slim, false)
+        if #data > 58000 then
+            slim.bags = nil
+            slim.bags_truncated = true
+            data = encode(slim, false)
+        end
+        if #data > 58000 then
+            slim.quests = nil
+            slim.quests_truncated = true
+            data = encode(slim, false)
+        end
+    end
+    if #data > 58000 then
+        native_last_ok = false
+        return
+    end
+    local wrapped = '{"version":1,"session":"' .. native_session ..
+        '","sequence":' .. tostring(native_sequence + 1) ..
+        ',"kind":"snapshot","captured_at":' .. tostring(export.captured_at or time()) ..
+        ',"data":' .. data .. '}'
+    if #wrapped > 60000 then return end
+    native_sequence = native_sequence + 1
+    local success, sent = pcall(WoWMCP.Publish, wrapped)
+    native_last_ok = success and sent and true or false
+    if native_last_ok then native_last_bytes = #wrapped end
+end
+
+SLASH_WOWMCPNATIVE1 = "/wowmcpnative"
+SlashCmdList.WOWMCPNATIVE = function()
+    if not native_available() then
+        DEFAULT_CHAT_FRAME:AddMessage("WoW MCP Native: brak funkcji DLL. Dziala tryb wizualny.")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("WoW MCP Native: " ..
+            (native_last_ok and "ostatni pakiet wyslany" or "odbiornik niedostepny") ..
+            ", bajtow: " .. tostring(native_last_bytes) ..
+            ", sekwencja: " .. tostring(native_sequence))
+    end
 end
 
 local function refresh_payload()
@@ -722,6 +799,13 @@ end
 panel:SetScript("OnUpdate", function(_, elapsed)
     elapsed_time = elapsed_time + elapsed
     refresh_age = refresh_age + elapsed
+    native_refresh_age = native_refresh_age + elapsed
+    -- Native snapshots do not wait for all pages of the legacy visual strip.
+    if native_refresh_age >= 3 and native_available() then
+        native_refresh_age = 0
+        collect()
+        publish_native()
+    end
     if elapsed_time < 0.18 then return end
     elapsed_time = 0
     page = page + 1

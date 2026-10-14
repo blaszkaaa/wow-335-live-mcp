@@ -13,6 +13,9 @@ from pathlib import Path
 import numpy as np
 from PIL import ImageGrab
 
+from native_bridge.pipe import NativePipeReceiver
+from native_bridge.hub import NativeHubClient
+
 
 GAME_DIR = os.environ.get("WOW_GAME_DIR")
 GAME = Path(GAME_DIR).expanduser().resolve() if GAME_DIR else None
@@ -430,8 +433,68 @@ def live_game_data(timeout_seconds=20):
     return {"available": False, "reason": "Nie udało się odczytać paska danych. Sprawdź, czy WoWMCPData jest włączony i użyj /reload w grze."}
 
 
+_NATIVE_RECEIVER = None
+
+
+def wow_native_status():
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
+        return {"available": False, "enabled": False,
+                "reason": "Set WOW_MCP_NATIVE_BRIDGE=1 to enable native telemetry."}
+    # Prefer the GUI-hosted hub so the telemetry pipe has only one owner.
+    hub = NativeHubClient.discover()
+    if hub is not None:
+        remote = hub.status()
+        if remote is not None:
+            return {**remote, "transport": "desktop_gui_hub"}
+    if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
+        return {"available": False, "enabled": True,
+                "reason": "GUI not running or not reachable; start desktop_app.py."}
+    if _NATIVE_RECEIVER is None:
+        return {"available": False, "enabled": False,
+                "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
+    return _NATIVE_RECEIVER.status()
+
+
+def read_wow_native_data():
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
+        return {"available": False, "enabled": False, "data": None,
+                "reason": "Set WOW_MCP_NATIVE_BRIDGE=1 to enable native telemetry."}
+    hub = NativeHubClient.discover()
+    if hub is not None:
+        remote = hub.snapshot()
+        if remote is not None:
+            return {**remote, "transport": "desktop_gui_hub"}
+    if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
+        return {"available": False, "enabled": True, "data": None,
+                "reason": "GUI not running or not reachable; start desktop_app.py."}
+    if _NATIVE_RECEIVER is None:
+        return {"available": False, "enabled": False,
+                "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
+    return _NATIVE_RECEIVER.snapshot()
+
+
+def read_best_wow_live_data():
+    """Use fresh native addon telemetry first; fall back to the visual strip.
+
+    A manually launched stand-alone native demo sender must never be treated
+    as real character data by the default gameplay-advice tool.
+    """
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1":
+        native = read_wow_native_data()
+        if (native.get("available") and native.get("session") != "native-demo"
+                and isinstance(native.get("data"), dict)):
+            return native
+    return live_game_data()
+
+
 TOOLS = [
     {"name": "wow_status", "description": "Check whether the local WoW 3.3.5a window is ready for an on-demand screenshot. Read-only.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+     "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+    {"name": "wow_native_status", "description": "Experimental native named-pipe receiver status. Opt in with WOW_MCP_NATIVE_BRIDGE=1. Optional offline WrathClassicAPI Lua adapter supported; do not use on unauthorized online clients.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+     "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+    {"name": "read_wow_native_data", "description": "Read the most recent validated snapshot from an experimental local DLL pipe. Unavailable if the receiver is disabled or the frame is stale (>30s). Optional native Lua adapter requires explicit separate game-side installation and testing.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
     {"name": "capture_wow", "description": "Capture one screenshot of the WoW window rectangle on user request. Briefly brings WoW forward and restores the previous window. Does not control the character. Other windows overlapping the rectangle can appear in the image.",
@@ -446,7 +509,7 @@ TOOLS = [
     {"name": "read_wow_combat_log", "description": "Read the latest raw WoW combat-log lines if /combatlog is enabled in game. Report file age; a missing or old file is not live combat data.",
      "inputSchema": {"type": "object", "properties": {"max_lines": {"type": "integer", "minimum": 1, "maximum": 100}}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
-    {"name": "read_wow_live_data", "description": "Read current structured WoW 3.3.5a data from the WoWMCPData color strip: character stats, quests with turn-in status, bags, spells, action bar, open trainer/merchant/gossip/quest dialog, and recent player combat summary. Interaction data exists only when an NPC window is open or for 30 seconds after closing. Combat summary is the last fight, not a complete combat log. Report age and missing fields honestly. Read-only and on demand.",
+    {"name": "read_wow_live_data", "description": "Read current structured WoW 3.3.5a data. With WOW_MCP_NATIVE_BRIDGE=1, prefer fresh validated native Lua telemetry if present, otherwise use the WoWMCPData color strip: character stats, quests with turn-in status, bags, spells, action bar, open trainer/merchant/gossip/quest dialog, and recent player combat summary. Interaction data exists only when an NPC window is open or for 30 seconds after closing. Combat summary is the last fight, not a complete combat log. Report age and missing fields honestly. Read-only and on demand.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
 ]
@@ -475,8 +538,12 @@ def reply(req):
                 result = {"content": [{"type": "text", "text": json.dumps(game_data(), ensure_ascii=False)}]}
             elif name == "read_wow_combat_log":
                 result = {"content": [{"type": "text", "text": json.dumps(combat_log(req.get("params", {}).get("arguments", {}).get("max_lines", 40)), ensure_ascii=False)}]}
+            elif name == "wow_native_status":
+                result = {"content": [{"type": "text", "text": json.dumps(wow_native_status(), ensure_ascii=False)}]}
+            elif name == "read_wow_native_data":
+                result = {"content": [{"type": "text", "text": json.dumps(read_wow_native_data(), ensure_ascii=False)}]}
             elif name == "read_wow_live_data":
-                result = {"content": [{"type": "text", "text": json.dumps(live_game_data(), ensure_ascii=False)}]}
+                result = {"content": [{"type": "text", "text": json.dumps(read_best_wow_live_data(), ensure_ascii=False)}]}
             elif name == "capture_wow":
                 result = {"content": [capture()]}
             else:
@@ -491,6 +558,12 @@ def reply(req):
 
 
 def main():
+    global _NATIVE_RECEIVER
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1" and os.environ.get("WOW_MCP_NATIVE_HUB") != "1":
+        hub = NativeHubClient.discover()
+        if hub is None or hub.status() is None:
+            _NATIVE_RECEIVER = NativePipeReceiver()
+            _NATIVE_RECEIVER.start()
     for line in sys.stdin:
         try:
             response = reply(json.loads(line))

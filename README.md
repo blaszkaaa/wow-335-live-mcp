@@ -26,6 +26,71 @@ The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip mu
 
 `read_wow_live_data` reports `age_seconds`. Trainer, merchant, gossip, and quest-dialog details are available while the corresponding window is open and for up to 30 seconds afterward. The combat summary describes the latest fight since the addon was loaded; it is not a full combat log. Large snapshots may omit spells, actions, or bags and mark the omitted section with a `*_truncated` flag. The live strip does not include Questie's map database or a complete history of every quest.
 
+## Opcjonalna integracja Lua → DLL (offline)
+
+Źródło modułu: [WoWMCPNativeLua.cpp](native_bridge/adapter/WoWMCPNativeLua.cpp).
+Adapter rejestruje funkcję WoWMCP.Publish(json) za pomocą WrathClassicAPI.
+Addon WoWMCPData wysyła natywne snapshoty mniej więcej co 3 sekundy i nadal
+renderuje pasek kolorowy. Kiedy WOW_MCP_NATIVE_BRIDGE=1, standardowe
+read_wow_live_data najpierw odczytuje świeży pakiet DLL, a gdy go brak,
+wraca do odczytu wizualnego. Pakiety z nadajnika demonstracyjnego nie są
+traktowane jako faktyczna telemetria gry.
+
+**To kod eksperymentalny do autoryzowanych testów offline. Nie używaj
+niezatwierdzonych hooków DLL na Warmane — ryzyko blokady konta.** Natywne
+uruchomienie w samym Wow.exe wymaga odrębnego testu i zgody operatora.
+
+## Nowa aplikacja desktopowa (zalecana)
+
+**WoW MCP Control Center 3.0** to aplikacja Windows oparta na **Tauri 2,
+React i TypeScript** zamiast Python/Tkinter. Ma własny spójny system
+projektowy, interfejs w języku polskim, pulpit statystyk i ekrany
+postaci, questów, ekwipunku, ustawień oraz diagnostyki.
+
+Tauri uruchamia usługę Python (PyInstaller sidecar), która nadal obsługuje
+MCP, addon i eksperymentalny kanał DLL. Nie trzeba osobno uruchamiać
+starego GUI w Pythonie. Instalator Windows jest budowany przez workflow
+**Tauri Windows Desktop** na GitHub Actions.
+
+Szczegóły i instrukcja: [desktop-next/README.md](desktop-next/README.md).
+
+**Opcjonalny adapter Lua→DLL został zaimplementowany i przechodzi kompilację
+Win32, ale nie został sprawdzony w działającym kliencie ani na Warmane.**
+Odczyt wizualny pozostaje rozwiązaniem domyślnym i zapasowym.
+[Instrukcja testowa native Lua](native_bridge/adapter/README.md).
+
+### Poprzednie GUI (tryb legacy)
+
+Stary interfejs CustomTkinter z pliku desktop_app.py jest pozostawiony
+wyłącznie jako rozwiązanie zapasowe.
+
+## Desktop Control Center 2.0 (legacy / experimental)
+
+The Windows application has a polished dark interface built with
+[CustomTkinter](https://customtkinter.tomschimansky.com/):
+
+- **Przegląd**: hero panel, live status, level, health, ready quests and quick actions.
+- **Postać**: character and realm, health/power/XP progress bars, zone and money.
+- **Zadania**: quest search, "Wszystkie/Gotowe/W toku" filters and progress.
+- **Ekwipunek**: equipped items and bag inventory.
+- **Diagnostyka**: received/rejected packets, data source, errors and event feed.
+- **Ustawienia**: WoW directory, connection configuration and opt-in periodic
+  visual reads every 30 seconds (may briefly foreground WoW).
+
+Run from source with **py -3 desktop_app.py**, or download the packaged Windows
+EXE from the GitHub Actions artifact associated with the PR. Documentation in
+Polish: [docs/GUI_PL.md](docs/GUI_PL.md).
+
+The UI owns the optional native pipe and shares status over an authenticated
+127.0.0.1 hub with other MCP processes. Set \`WOW_MCP_NATIVE_BRIDGE=1\`
+and \`WOW_MCP_NATIVE_HUB=1\` in the MCP server environment to enable it.
+
+**Important:** Native pipe transfer is tested independently of the game.
+In-game DLL/Lua integration is **not** implemented. Real WoW data can be
+requested using the existing visual addon; no game DLL injection is needed.
+The experimental DLL should not be loaded into Warmane WoW.exe.
+
+
 ## Requirements
 
 - Windows 10/11 with a running WoW 3.3.5a client (`Wow.exe`).
