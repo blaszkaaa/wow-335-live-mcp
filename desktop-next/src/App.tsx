@@ -29,6 +29,19 @@ const questReady=(q:Quest)=>Boolean(q.ready_to_turn_in);
 const listQuests=(data:GameData|null)=>Array.isArray(data?.quests)?data.quests.filter(Boolean):[];
 const items=(a?:Item[])=>Array.isArray(a)?a.filter(Boolean):[];
 const cx=(...a:(string|false|undefined)[])=>a.filter(Boolean).join(" ");
+const SCALE_MIN=80;
+const SCALE_MAX=140;
+const SCALE_STEP=10;
+const SCALE_STORAGE_KEY="wowmcp.ui-scale";
+const clampScale=(value:number)=>Math.min(SCALE_MAX,Math.max(SCALE_MIN,Math.round(value/SCALE_STEP)*SCALE_STEP));
+function readSavedScale():number {
+  try {
+    const saved=Number(window.localStorage.getItem(SCALE_STORAGE_KEY)??100);
+    return Number.isFinite(saved)?clampScale(saved):100;
+  } catch {
+    return 100;
+  }
+}
 
 function Dot({on}:{on:boolean}){return <span className={cx("dot",on?"yes":"no")}/>;}
 function Header({title,subtitle,action}:{title:string;subtitle?:string;action?:React.ReactNode}){return <div className="panel-head"><div><h3>{title}</h3>{subtitle&&<p>{subtitle}</p>}</div>{action}</div>;}
@@ -48,6 +61,31 @@ export default function App(){
   const [questFilter,setQuestFilter]=useState<"all"|"ready"|"active">("all");
   const [itemFilter,setItemFilter]=useState("");
   const [menuOpen,setMenuOpen]=useState(false);
+  const [uiScale,setUiScale]=useState<number>(readSavedScale);
+  const [viewportWidth,setViewportWidth]=useState(()=>window.innerWidth);
+  const logicalWidth=viewportWidth/(uiScale/100);
+  const compact=logicalWidth<1030;
+  const narrow=logicalWidth<820;
+
+  useEffect(()=>{
+    document.documentElement.style.setProperty("--ui-scale",String(uiScale/100));
+    try{window.localStorage.setItem(SCALE_STORAGE_KEY,String(uiScale));}catch{}
+  },[uiScale]);
+  useEffect(()=>{
+    const onResize=()=>setViewportWidth(window.innerWidth);
+    window.addEventListener("resize",onResize);
+    return()=>window.removeEventListener("resize",onResize);
+  },[]);
+  useEffect(()=>{
+    const onZoomKey=(e:KeyboardEvent)=>{
+      if(!(e.ctrlKey||e.metaKey)||e.altKey)return;
+      if(e.key==="+"||e.key==="="){e.preventDefault();setUiScale(z=>clampScale(z+SCALE_STEP));}
+      else if(e.key==="-"){e.preventDefault();setUiScale(z=>clampScale(z-SCALE_STEP));}
+      else if(e.key==="0"){e.preventDefault();setUiScale(100);}
+    };
+    window.addEventListener("keydown",onZoomKey);
+    return()=>window.removeEventListener("keydown",onZoomKey);
+  },[]);
 
   const refresh=useCallback(async()=>{
     try{setSnapshot(await getDashboard());setServiceError("");}
@@ -84,7 +122,7 @@ export default function App(){
   const genuine=snapshot.available&&!snapshot.demo;
   const statusText=snapshot.demo?"Podgląd demonstracyjny":genuine?"Dane gry dostępne":snapshot.read_in_progress?"Trwa odczyt gry":"Brak danych gry";
 
-  return <div className="shell">
+  return <div className={cx("shell",compact&&"compact",narrow&&"narrow")}>
     <button className="hamburger" onClick={()=>setMenuOpen(v=>!v)}><Layers size={23}/></button>
     <aside className={cx("sidebar",menuOpen&&"show")}>
       <div className="identity"><div className="logo">W</div><div className="identity-text"><b>WoW <span>MCP</span></b><small>CONTROL CENTER</small></div></div>
@@ -106,7 +144,7 @@ export default function App(){
         {page==="quests"&&<div className="page"><div className="page-title"><div><span className="eyebrow">DZIENNIK ZADAŃ</span><h1>Twoje questy</h1><p>Wyszukuj zadania i śledź ukończone cele.</p></div><span className="count-chip"><BookOpen size={17}/>{data?String(quests.length)+" zadań":"Brak odczytu"}</span></div><div className="filter-bar"><div className="search"><Search size={19}/><input placeholder="Szukaj po nazwie lub celu..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="segments">{([["all","Wszystkie"],["ready","Gotowe"],["active","W toku"]] as const).map(([id,name])=><button key={id} className={questFilter===id?"active":""} onClick={()=>setQuestFilter(id)}>{name}</button>)}</div></div><div className="quest-count"><span><CheckCircle2 size={17}/>{ready} gotowych do oddania</span><span>{shown.length} wyświetlanych zadań</span></div>{shown.length?<div className="quest-list">{shown.map((q,i)=><div className="quest-card" key={i}><div className="quest-card-top"><span className="quest-card-icon">{questReady(q)?<CheckCircle2 size={19}/>:<BookOpen size={19}/>}</span><div><b>{q.title||"Bez nazwy"}</b><p>{q.level?"Poziom "+q.level+" • ":""}{questReady(q)?"Gotowe do oddania":"W trakcie"}</p></div><span className={cx("tag",questReady(q)&&"green")}>{questReady(q)?"GOTOWE":"W TOKU"}</span></div>{q.objectives&&q.objectives.length>0&&<div className="objectives">{q.objectives.map((o,j)=><div className={cx("objective",o.done&&"finished")} key={j}><span>{o.done?<Check size={14}/>:<span className="ring"/>}</span>{o.text||"Cel bez opisu"}</div>)}</div>}</div>)}</div>:<div className="panel"><Empty Icon={BookOpen} title="Brak zadań" body={quests.length?"Zmień filtr lub wyszukiwanie.":"Odczytaj postać, aby pobrać dziennik questów."}/></div>}</div>}
         {page==="inventory"&&<div className="page"><div className="page-title"><div><span className="eyebrow">PRZEDMIOTY</span><h1>Twój ekwipunek</h1><p>Wszystko, co masz na sobie i w torbach.</p></div><span className="count-chip"><Package size={17}/>{data?String(gear.length+bags.length)+" pozycji":"Brak danych"}</span></div><div className="two-cols"><div className="panel"><Header title="Wyposażenie" subtitle={gear.length+" przedmiotów"}/>{gear.length?gear.map((x,i)=><ItemRow key={i} item={x}/>):<Empty Icon={Package} title="Brak ekwipunku" body="Wczytaj dane z postaci."/ >}</div><div className="panel"><Header title="Zawartość toreb" subtitle={bags.length+" rodzajów przedmiotów"}/><div className="search compact"><Search size={17}/><input placeholder="Filtruj przedmioty..." value={itemFilter} onChange={e=>setItemFilter(e.target.value)}/></div>{shownItems.length?shownItems.map((x,i)=><ItemRow key={i} item={x}/>):<Empty Icon={Package} title="Nic tu nie ma" body="Brak danych lub wyników wyszukiwania."/ >}</div></div></div>}
         {page==="diagnostics"&&<div className="page"><div className="page-title"><div><span className="eyebrow">STAN TECHNICZNY</span><h1>Diagnostyka</h1><p>Podgląd źródeł, pakietów i stanu połączenia.</p></div><button className="btn secondary" onClick={()=>void refresh()}><RefreshCcw size={17}/>Odśwież</button></div><div className="stats"><Stat Icon={Database} label="ODEBRANE" value={String(snapshot.transport?.accepted_frames||0)} detail="Poprawne pakiety" tone="mint"/><Stat Icon={X} label="ODRZUCONE" value={String(snapshot.transport?.rejected_frames||0)} detail="Niepoprawne pakiety" tone="yellow"/><Stat Icon={Cpu} label="SEKWENCJA" value={String(snapshot.transport?.sequence??"—")} detail="Ostatnia odebrana"/><Stat Icon={Activity} label="WIEK DANYCH" value={snapshot.transport?.age_seconds!==undefined&&snapshot.transport.age_seconds!==null?snapshot.transport.age_seconds.toFixed(1)+" s":"—"} detail="Od ostatniego pakietu" tone="blue"/></div><div className="two-cols"><div className="panel"><Header title="Źródła danych"/><Detail label="Źródło" value={snapshot.source_label||"—"}/><Detail label="Wow.exe" value={snapshot.game?.running?"Uruchomiony":"Nie wykryto"}/><Detail label="Folder gry" value={snapshot.game?.installed?"Skonfigurowany":"Nie skonfigurowany"}/><Detail label="Named Pipe" value={snapshot.transport?.pipe?"Aktywny":"Nieaktywny"}/><Detail label="Odczyt wizualny" value={time(snapshot.last_visual_read)}/></div><div className="panel"><Header title="Terminal MCP" subtitle="Kanał lokalny"/><div className="terminal"><div><span>$</span> wow-mcp status</div><div><span>✓</span> pipe: {snapshot.transport?.pipe?"ready":"waiting"}</div><div><span>✓</span> data: {snapshot.available?"available":"not available"}</div><div><span>i</span> source: {snapshot.source||"none"}</div></div><p className="tiny-note">DLL nie jest obecnie podłączona do Lua gry. Unikaj modyfikacji klienta Warmane.</p></div></div>{snapshot.error&&<div className="notice">{snapshot.error}</div>}</div>}
-        {page==="settings"&&<div className="page"><div className="page-title"><div><span className="eyebrow">KONFIGURACJA</span><h1>Ustawienia</h1><p>Połącz WoW z aplikacją i skonfiguruj MCP.</p></div></div><div className="settings-stack"><div className="panel"><Header title="Lokalizacja World of Warcraft" subtitle="Folder zawierający Wow.exe"/><div className="folder-row"><div className="folder-icon"><FolderOpen size={23}/></div><div><b>{snapshot.game?.directory?"WoW 3.3.5a":"Brak wskazanego folderu"}</b><span>{snapshot.game?.directory||"Wybierz katalog swojej gry"}</span></div><button className="btn secondary" onClick={()=>void selectFolder()}><FolderOpen size={16}/>Wybierz</button></div></div><div className="panel"><Header title="Źródła danych" subtitle="Aktualnie dostępne metody odczytu"/><div className="setting-option"><span className="option-icon"><Layers size={20}/></span><div><b>Addon WoWMCPData</b><p>Odczyt prawdziwych danych za pomocą paska wizualnego.</p></div><span className="tag green">DOSTĘPNY</span></div><div className="setting-option"><span className="option-icon blue"><Cpu size={20}/></span><div><b>DLL Native Bridge</b><p>Eksperymentalny transport Named Pipe, bez połączenia Lua.</p></div><span className="tag">BETA</span></div></div><div className="panel"><Header title="Przetestuj interfejs" subtitle="Podgląd bez konieczności uruchamiania WoW"/><p className="setting-copy">Wyświetlane będą wyłącznie przykładowe dane, wyraźnie oznaczone jako demonstracyjne.</p><button className="btn secondary" onClick={()=>void action("demo")}><Sparkles size={16}/>Włącz tryb demo</button></div><div className="panel"><Header title="Połączenie z ChatGPT" subtitle="Zmienne środowiskowe MCP"/><div className="code-copy">WOW_MCP_NATIVE_BRIDGE=1<br/>WOW_MCP_NATIVE_HUB=1<button onClick={async()=>{try{await navigator.clipboard.writeText("WOW_MCP_NATIVE_BRIDGE=1\nWOW_MCP_NATIVE_HUB=1");setMessage("Skopiowano konfigurację.");}catch{setMessage("Kopiowanie jest niedostępne.")}}}><Copy size={17}/></button></div></div></div></div>}
+        {page==="settings"&&<div className="page"><div className="page-title"><div><span className="eyebrow">KONFIGURACJA</span><h1>Ustawienia</h1><p>Połącz WoW z aplikacją i skonfiguruj MCP.</p></div></div><div className="settings-stack"><div className="panel"><Header title="Lokalizacja World of Warcraft" subtitle="Folder zawierający Wow.exe"/><div className="folder-row"><div className="folder-icon"><FolderOpen size={23}/></div><div><b>{snapshot.game?.directory?"WoW 3.3.5a":"Brak wskazanego folderu"}</b><span>{snapshot.game?.directory||"Wybierz katalog swojej gry"}</span></div><button className="btn secondary" onClick={()=>void selectFolder()}><FolderOpen size={16}/>Wybierz</button></div></div><div className="panel"><Header title="Źródła danych" subtitle="Aktualnie dostępne metody odczytu"/><div className="setting-option"><span className="option-icon"><Layers size={20}/></span><div><b>Addon WoWMCPData</b><p>Odczyt prawdziwych danych za pomocą paska wizualnego.</p></div><span className="tag green">DOSTĘPNY</span></div><div className="setting-option"><span className="option-icon blue"><Cpu size={20}/></span><div><b>DLL Native Bridge</b><p>Eksperymentalny transport Named Pipe, bez połączenia Lua.</p></div><span className="tag">BETA</span></div></div><div className="panel"><Header title="Skalowanie interfejsu" subtitle="Dopasuj wielkość do ekranu i ustawień DPI Windows"/><div className="scale-controls"><button className="scale-step" aria-label="Zmniejsz skalę" disabled={uiScale<=SCALE_MIN} onClick={()=>setUiScale(z=>clampScale(z-SCALE_STEP))}>−</button><input aria-label="Skala interfejsu" type="range" min={SCALE_MIN} max={SCALE_MAX} step={SCALE_STEP} value={uiScale} onChange={e=>setUiScale(clampScale(Number(e.target.value)))}/><button className="scale-step" aria-label="Zwiększ skalę" disabled={uiScale>=SCALE_MAX} onClick={()=>setUiScale(z=>clampScale(z+SCALE_STEP))}>+</button><strong>{uiScale}%</strong><button className="scale-reset" onClick={()=>setUiScale(100)}>Resetuj</button></div><p className="setting-copy">Skala 80–140% jest zapamiętywana. Możesz też używać Ctrl + / Ctrl − / Ctrl 0.</p></div><div className="panel"><Header title="Przetestuj interfejs" subtitle="Podgląd bez konieczności uruchamiania WoW"/><p className="setting-copy">Wyświetlane będą wyłącznie przykładowe dane, wyraźnie oznaczone jako demonstracyjne.</p><button className="btn secondary" onClick={()=>void action("demo")}><Sparkles size={16}/>Włącz tryb demo</button></div><div className="panel"><Header title="Połączenie z ChatGPT" subtitle="Zmienne środowiskowe MCP"/><div className="code-copy">WOW_MCP_NATIVE_BRIDGE=1<br/>WOW_MCP_NATIVE_HUB=1<button onClick={async()=>{try{await navigator.clipboard.writeText("WOW_MCP_NATIVE_BRIDGE=1\nWOW_MCP_NATIVE_HUB=1");setMessage("Skopiowano konfigurację.");}catch{setMessage("Kopiowanie jest niedostępne.")}}}><Copy size={17}/></button></div></div></div></div>}
         <footer className="footer"><span>WoW MCP Control Center <i>·</i> Tauri Desktop</span><span>Dane gry pozostają lokalnie na Twoim komputerze</span></footer>
       </main>
     </div>
