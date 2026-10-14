@@ -25,7 +25,7 @@ def validate_game_directory(directory):
         raise ValueError("Najpierw wybierz folder z plikiem Wow.exe.")
     if len(directory) > 1024:
         raise ValueError("Ścieżka do gry jest za długa.")
-    game = Path(directory).expanduser().resolve(strict=True)
+    game = Path(directory).expanduser().resolve(strict=False)
     if not game.is_dir() or not (game / "Wow.exe").is_file():
         raise ValueError("Wybrany katalog nie zawiera Wow.exe.")
     return game
