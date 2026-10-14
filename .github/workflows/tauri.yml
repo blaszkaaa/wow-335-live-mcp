@@ -2,7 +2,7 @@ name: Tauri Windows Desktop
 
 on:
   push:
-    branches: ["feature/native-pipe-bridge-prototype"]
+    branches: ["main", "fix/windows-console-and-ui-scaling"]
     paths:
       - "desktop-next/**"
       - "desktop_service.py"
