@@ -6,9 +6,12 @@ on:
     paths:
       - "desktop-next/**"
       - "desktop_service.py"
+      - "game_launcher.py"
+      - "WoWMCPData/**"
       - "native_bridge/**"
       - "ui_models.py"
       - "tests/test_desktop_service.py"
+      - "tests/test_game_launcher.py"
       - ".github/workflows/tauri.yml"
   pull_request:
     paths:
@@ -46,7 +49,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Package background service
         run: |
-          pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData/WoWMCPData.lua;WoWMCPData" --name wow-mcp-service desktop_service.py
+          pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --name wow-mcp-service desktop_service.py
           New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries | Out-Null
           Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
       - name: Prepare Tauri icons
