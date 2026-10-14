@@ -26,6 +26,20 @@ The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip mu
 
 `read_wow_live_data` reports `age_seconds`. Trainer, merchant, gossip, and quest-dialog details are available while the corresponding window is open and for up to 30 seconds afterward. The combat summary describes the latest fight since the addon was loaded; it is not a full combat log. Large snapshots may omit spells, actions, or bags and mark the omitted section with a `*_truncated` flag. The live strip does not include Questie's map database or a complete history of every quest.
 
+## Opcjonalna integracja Lua → DLL (offline)
+
+Źródło modułu: [WoWMCPNativeLua.cpp](native_bridge/adapter/WoWMCPNativeLua.cpp).
+Adapter rejestruje funkcję WoWMCP.Publish(json) za pomocą WrathClassicAPI.
+Addon WoWMCPData wysyła natywne snapshoty mniej więcej co 3 sekundy i nadal
+renderuje pasek kolorowy. Kiedy WOW_MCP_NATIVE_BRIDGE=1, standardowe
+read_wow_live_data najpierw odczytuje świeży pakiet DLL, a gdy go brak,
+wraca do odczytu wizualnego. Pakiety z nadajnika demonstracyjnego nie są
+traktowane jako faktyczna telemetria gry.
+
+**To kod eksperymentalny do autoryzowanych testów offline. Nie używaj
+niezatwierdzonych hooków DLL na Warmane — ryzyko blokady konta.** Natywne
+uruchomienie w samym Wow.exe wymaga odrębnego testu i zgody operatora.
+
 ## Nowa aplikacja desktopowa (zalecana)
 
 **WoW MCP Control Center 3.0** to aplikacja Windows oparta na **Tauri 2,
@@ -40,8 +54,10 @@ starego GUI w Pythonie. Instalator Windows jest budowany przez workflow
 
 Szczegóły i instrukcja: [desktop-next/README.md](desktop-next/README.md).
 
-**Obecny odczyt gry nadal wykorzystuje addon wizualny. DLL nie jest jeszcze
-podłączona do Lua WoW.** Nie instaluj jej do klienta Warmane.
+**Opcjonalny adapter Lua→DLL został zaimplementowany i przechodzi kompilację
+Win32, ale nie został sprawdzony w działającym kliencie ani na Warmane.**
+Odczyt wizualny pozostaje rozwiązaniem domyślnym i zapasowym.
+[Instrukcja testowa native Lua](native_bridge/adapter/README.md).
 
 ### Poprzednie GUI (tryb legacy)
 
