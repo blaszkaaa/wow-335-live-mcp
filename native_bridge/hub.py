@@ -121,6 +121,8 @@ class NativeHubServer:
                         raise ValueError("Expected JSON object")
                     if self.path == "/v2/refresh" and not body:
                         payload = hub.dashboard.request_refresh()
+                    elif self.path == "/v2/launch" and not body:
+                        payload = hub.dashboard.request_launch()
                     elif self.path == "/v2/demo" and not body:
                         payload = hub.dashboard.show_demo()
                     elif self.path == "/v2/settings":

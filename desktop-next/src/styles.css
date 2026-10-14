@@ -59,3 +59,15 @@
   .top-actions .connection{max-width:190px}
   .hero-level{min-width:0}
 }
+
+/* One-click game startup feedback */
+.game-launch-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.launch-banner{display:flex;gap:10px;align-items:center;padding:12px 16px;margin:-7px 0 17px;background:#123b32;border:1px solid #286952;color:#b9f5db;border-radius:10px;font-size:12px}
+.launch-banner.launch-error{background:#452c25;border-color:#764938;color:#ffc9b7}
+.launch-settings-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:18px}
+.launch-addon-state{font-size:12px;color:#9fb5bc}
+.launch-note{margin:13px 0 0;color:#99edc9;font-size:12px;line-height:1.6}
+.launch-error-text{color:#f2b29b}
+.shell.narrow .game-launch-actions{justify-content:flex-start;width:100%}
+.shell.narrow .page-title{flex-wrap:wrap}
+@media(max-width:1060px){.game-launch-actions{justify-content:flex-start}.page-title{flex-wrap:wrap}}

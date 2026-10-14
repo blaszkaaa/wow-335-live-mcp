@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 
+from game_launcher import addon_installed, install_addon, launch_wow
 from native_bridge.hub import NativeHubServer, DISCOVERY_FILE
 from native_bridge.pipe import NativePipeReceiver
 from ui_models import metrics, select_snapshot, source_label
@@ -46,6 +47,10 @@ class DesktopState:
         self._game_checked_dir = None
         self._game_checking = False
         self._game_running = False
+        self._launch_busy = False
+        self._launch_state = "idle"
+        self._launch_message = "Wybierz folder gry, aby rozpocząć."
+        self._addon_backup = None
         self._game_dir = os.environ.get("WOW_GAME_DIR") or ""
         try:
             settings = json.loads(self.settings_file.read_text(encoding="utf-8"))
@@ -71,11 +76,65 @@ class DesktopState:
             self._game_checked_at = 0.0
             self._game_checked_dir = None
             self._game_running = False
+            self._launch_state = "idle"
+            self._launch_message = "Gotowe do uruchomienia gry."
+            self._addon_backup = None
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
             temp = self.settings_file.with_suffix(".tmp")
             temp.write_text(json.dumps({"game_dir": location}, ensure_ascii=False), encoding="utf-8")
             os.replace(temp, self.settings_file)
         return self.get_settings()
+
+    def request_launch(self):
+        """Queue addon setup and launch without blocking HTTP or the app window."""
+        with self._lock:
+            if self._launch_busy:
+                return {"started": False, "reason": "already_starting"}
+            game_dir = self._game_dir
+            if not game_dir or not (Path(game_dir) / "Wow.exe").is_file():
+                return {"started": False, "reason": "game_dir_missing"}
+            self._launch_busy = True
+            self._launch_state = "installing"
+            self._launch_message = "Przygotowywanie addonu WoWMCPData..."
+            self._addon_backup = None
+        threading.Thread(target=self._launch_worker, args=(game_dir,),
+                         daemon=True, name="wow-one-click-launch").start()
+        return {"started": True}
+
+    def _launch_worker(self, game_dir):
+        try:
+            result = install_addon(game_dir)
+            with self._lock:
+                self._addon_backup = result.backup
+                self._launch_state = "starting"
+                self._launch_message = "Uruchamianie Wow.exe..."
+            if find_game_running(game_dir):
+                with self._lock:
+                    self._launch_state = "already_running"
+                    self._launch_message = (
+                        "WoW już działa. " +
+                        ("Wpisz /reload, aby wczytać zaktualizowany addon."
+                         if result.changed else "Addon jest gotowy.")
+                    )
+                    self._game_checked_dir = game_dir
+                    self._game_checked_at = time.monotonic()
+                    self._game_running = True
+            else:
+                launch_wow(game_dir)
+                with self._lock:
+                    self._launch_state = "started"
+                    self._launch_message = (
+                        "Uruchomiono WoW z addonem. Jeśli to pierwsze uruchomienie, "
+                        "włącz WoW MCP Data na ekranie wyboru postaci.")
+                    self._game_checked_at = 0.0
+                    self._game_checked_dir = None
+        except (OSError, ValueError, RuntimeError) as exc:
+            with self._lock:
+                self._launch_state = "error"
+                self._launch_message = str(exc)[:400]
+        finally:
+            with self._lock:
+                self._launch_busy = False
 
     def request_refresh(self):
         with self._lock:
@@ -182,6 +241,10 @@ class DesktopState:
             error = self._error
             game_dir = self._game_dir
             last_read = self._updated_at
+            launch = {"status": self._launch_state,
+                      "busy": self._launch_busy,
+                      "message": self._launch_message,
+                      "backup": self._addon_backup}
         native = self.receiver.snapshot()
         active = select_snapshot(native, visual)
         if not active.get("available") and demo is not None:
@@ -207,7 +270,9 @@ class DesktopState:
             "error": error,
             "game": {"installed": game_installed,
                      "running": self._cached_game_running(game_dir),
-                     "directory": game_dir},
+                     "directory": game_dir,
+                     "addon_installed": bool(game_installed and addon_installed(game_dir))},
+            "launch": launch,
             "transport": transport,
         }
 

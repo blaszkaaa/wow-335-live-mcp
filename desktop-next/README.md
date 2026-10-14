@@ -19,6 +19,26 @@ Tkinter. Obsługuje systemowy WebView2 oraz usługę Python działającą lokaln
 Zmiany w kodzie wymagają ponownej instalacji **nowego EXE z GitHub Actions**;
 stary instalator nie otrzyma poprawek samodzielnie.
 
+## Uruchom WoW jednym kliknięciem
+
+1. Otwórz WoW MCP Control Center i wybierz **Ustawienia**.
+2. Wskaż folder zawierający `Wow.exe`, np.
+   `C:\Users\mati\Downloads\World of Warcraft 3.3.5a`.
+3. Kliknij **Uruchom WoW z addonem** lub na pulpicie **Uruchom WoW**.
+4. Aplikacja instaluje/zaktualizuje `WoWMCPData.toc` i
+   `WoWMCPData.lua` w `Interface\AddOns\WoWMCPData`, zachowując
+   kopię poprzedniej wersji w `Interface\AddOns-backups`, jeśli się różni.
+5. Uruchamia oryginalny `Wow.exe`. Jeśli gra już działa, nie otwiera drugiej
+   instancji. Po zmianie addonu wpisz `/reload`.
+6. Na ekranie postaci włącz **WoW MCP Data** w AddOns, jeśli dotąd nie
+   był włączony. Po wejściu do gry kliknij **Odczytaj grę** w panelu.
+
+Odbiornik Named Pipe i lokalny hub MCP uruchamiają się wraz z aplikacją.
+**Ważne:** ten automat NIE instaluje i NIE wstrzykuje eksperymentalnej DLL do
+klienta Warmane. Jest to nadal testowany oddzielnie moduł C++.
+Jego obecność w repozytorium nie oznacza, że jest bezpieczny lub
+zgodny z antycheatem danego serwera.
+
 ## Możliwości
 
 - Przegląd z kartą postaci, statystykami, zadaniami i paskami HP / XP.
