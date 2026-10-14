@@ -23,7 +23,8 @@ def find_game_running(game_dir):
     try:
         result = subprocess.run(
             ["tasklist", "/fi", "IMAGENAME eq Wow.exe", "/fo", "csv", "/nh"],
-            capture_output=True, text=True, timeout=3)
+            capture_output=True, text=True, timeout=3,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
         return '"Wow.exe"' in result.stdout
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -40,6 +41,11 @@ class DesktopState:
         self._error = None
         self._reading_since = None
         self._updated_at = 0
+        # Cache process discovery. Never block an HTTP dashboard request on tasklist.
+        self._game_checked_at = 0.0
+        self._game_checked_dir = None
+        self._game_checking = False
+        self._game_running = False
         self._game_dir = os.environ.get("WOW_GAME_DIR") or ""
         try:
             settings = json.loads(self.settings_file.read_text(encoding="utf-8"))
@@ -62,6 +68,9 @@ class DesktopState:
             raise ValueError("Folder must contain Wow.exe")
         with self._lock:
             self._game_dir = location
+            self._game_checked_at = 0.0
+            self._game_checked_dir = None
+            self._game_running = False
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
             temp = self.settings_file.with_suffix(".tmp")
             temp.write_text(json.dumps({"game_dir": location}, ensure_ascii=False), encoding="utf-8")
@@ -131,6 +140,40 @@ class DesktopState:
             self._demo = demo
         return {"demo": True}
 
+    def _cached_game_running(self, game_dir):
+        """Return cached state instantly and refresh the process check in the background."""
+        with self._lock:
+            now = time.monotonic()
+            valid = self._game_checked_dir == game_dir
+            running = self._game_running if valid else False
+            should_check = (
+                bool(game_dir) and
+                not self._game_checking and
+                (not valid or now - self._game_checked_at >= 8.0)
+            )
+            if should_check:
+                self._game_checking = True
+        if should_check:
+            threading.Thread(
+                target=self._refresh_game_status,
+                args=(game_dir,),
+                daemon=True,
+                name="wow-process-discovery",
+            ).start()
+        return running
+
+    def _refresh_game_status(self, game_dir):
+        try:
+            running = find_game_running(game_dir)
+            with self._lock:
+                if self._game_dir == game_dir:
+                    self._game_running = running
+                    self._game_checked_dir = game_dir
+                    self._game_checked_at = time.monotonic()
+        finally:
+            with self._lock:
+                self._game_checking = False
+
     def dashboard(self):
         with self._lock:
             visual = self._visual
@@ -162,7 +205,8 @@ class DesktopState:
             "read_in_progress": busy,
             "last_visual_read": last_read,
             "error": error,
-            "game": {"installed": game_installed, "running": find_game_running(game_dir),
+            "game": {"installed": game_installed,
+                     "running": self._cached_game_running(game_dir),
                      "directory": game_dir},
             "transport": transport,
         }

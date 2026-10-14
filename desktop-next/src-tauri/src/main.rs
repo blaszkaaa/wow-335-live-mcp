@@ -1,3 +1,7 @@
+// Suppress the terminal window for the packaged Tauri GUI on Windows.
+// Debug builds retain a console to make development diagnostics possible.
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf, sync::Mutex, time::Duration};
 use tauri::{Manager, RunEvent};

@@ -40,6 +40,42 @@ class DesktopServiceTests(unittest.TestCase):
             state.set_settings({"game_dir": str(folder)})
             self.assertEqual(state.get_settings()["game_dir"], str(folder))
 
+    def test_game_process_check_is_async_and_cached(self):
+        from threading import Event
+        gate = Event()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "WoW"
+            folder.mkdir()
+            (folder / "Wow.exe").touch()
+            state = DesktopState(NativePipeReceiver(), Path(tmp) / "settings.json")
+            state.set_settings({"game_dir": str(folder)})
+            with patch("desktop_service.find_game_running", side_effect=lambda _: (gate.wait(2), True)[1]) as detect:
+                # The dashboard must not wait for a potentially slow tasklist call.
+                started = time.monotonic()
+                data = state.dashboard()
+                self.assertLess(time.monotonic() - started, 0.5)
+                self.assertFalse(data["game"]["running"])
+                state.dashboard()
+                self.assertEqual(detect.call_count, 1)
+                gate.set()
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    if state.dashboard()["game"]["running"]:
+                        break
+                    time.sleep(0.02)
+                self.assertTrue(state.dashboard()["game"]["running"])
+                state.dashboard()
+                self.assertEqual(detect.call_count, 1)
+
+    @unittest.skipUnless(__import__("os").name == "nt", "Windows-only console flag")
+    def test_windows_process_detection_never_opens_console(self):
+        from unittest.mock import Mock
+        import subprocess
+        from desktop_service import find_game_running
+        with patch("desktop_service.subprocess.run", return_value=Mock(stdout='"Wow.exe","",123')) as run:
+            self.assertTrue(find_game_running("C:/Fake"))
+            self.assertTrue(run.call_args.kwargs["creationflags"] & subprocess.CREATE_NO_WINDOW)
+
     def test_authenticated_api_endpoints(self):
         with tempfile.TemporaryDirectory() as tmp:
             receiver = NativePipeReceiver()
