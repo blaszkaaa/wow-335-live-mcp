@@ -437,6 +437,9 @@ _NATIVE_RECEIVER = None
 
 
 def wow_native_status():
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
+        return {"available": False, "enabled": False,
+                "reason": "Set WOW_MCP_NATIVE_BRIDGE=1 to enable native telemetry."}
     # Prefer the GUI-hosted hub so the telemetry pipe has only one owner.
     hub = NativeHubClient.discover()
     if hub is not None:
@@ -453,6 +456,9 @@ def wow_native_status():
 
 
 def read_wow_native_data():
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
+        return {"available": False, "enabled": False, "data": None,
+                "reason": "Set WOW_MCP_NATIVE_BRIDGE=1 to enable native telemetry."}
     hub = NativeHubClient.discover()
     if hub is not None:
         remote = hub.snapshot()
