@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import queue
 import subprocess
+import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -55,10 +56,6 @@ class ControlCenter(tk.Tk):
         self.geometry("1130x760")
         self.minsize(890, 610)
         self.configure(bg=BG)
-        try:
-            self.iconbitmap(default="")  # Optional icon, safe fallback.
-        except tk.TclError:
-            pass
 
         self.receiver = NativePipeReceiver()
         self.hub = NativeHubServer(self.receiver)
@@ -285,8 +282,11 @@ class ControlCenter(tk.Tk):
         del self.messages[100:]
 
     def _run_demo(self):
-        directory = Path(__file__).resolve().parent
-        demo = directory / "build" / "native-bridge" / "Release" / "native_bridge_demo.exe"
+        directory = (Path(sys.executable).resolve().parent
+                     if getattr(sys, "frozen", False) else Path(__file__).resolve().parent)
+        demo = directory / "native_bridge_demo.exe"
+        if not demo.is_file():
+            demo = directory / "build" / "native-bridge" / "Release" / "native_bridge_demo.exe"
         if not demo.is_file():
             self._log("Brak native_bridge_demo.exe — skompiluj projekt CMake.")
             messagebox.showinfo("Dane testowe",
@@ -397,7 +397,8 @@ class ControlCenter(tk.Tk):
                 body = "Postać nie ma aktywnych zadań w ostatnim odczycie."
             else:
                 body = "Brak świeżych danych o zadaniach."
-            self._set_text(self.quests_text, body)
+            if self.quests_text.get("1.0", "end-1c") != body:
+                self._set_text(self.quests_text, body)
         elif self.section == "Diagnostyka":
             lines = [
                 "Kanał: Windows Named Pipe",
