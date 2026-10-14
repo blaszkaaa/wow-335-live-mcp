@@ -62,14 +62,14 @@ class NativeState:
                 self._received_at = time.time()
                 self._accepted += 1
             return True
-        except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
+        except (ValueError, TypeError, UnicodeError, RecursionError, json.JSONDecodeError):
             with self._lock:
                 self._rejected += 1
             return False
 
     def status(self):
         with self._lock:
-            age = None if self._received_at is None else max(0, time.time() - self._received_at)
+            age = None if self._received_at is None else max(0, time.time() - min(self._received_at, self._captured_at))
             return {
                 "available": self._data is not None and age <= STALE_AFTER_SECONDS,
                 "age_seconds": None if age is None else round(age, 2),
