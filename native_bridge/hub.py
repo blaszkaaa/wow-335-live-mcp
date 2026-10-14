@@ -41,6 +41,18 @@ class NativeHubClient:
         except (OSError, ValueError, error.URLError):
             return None
 
+    def _post(self, endpoint, payload):
+        url = "http://127.0.0.1:%d%s" % (self.port, endpoint)
+        headers = {"X-WoWMCP-Token": self.token,
+                   "Content-Type": "application/json"}
+        body = json.dumps(payload).encode("utf-8")
+        try:
+            req = request.Request(url, data=body, headers=headers, method="POST")
+            with request.urlopen(req, timeout=1) as response:
+                return json.loads(response.read(1024 * 1024).decode("utf-8"))
+        except (OSError, ValueError, error.URLError):
+            return None
+
     def status(self):
         return self._get("/v1/status")
 
