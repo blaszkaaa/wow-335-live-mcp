@@ -10,6 +10,8 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 
 add_library(WoWMCPNativeBridge SHARED src/bridge.cpp)
+set_property(TARGET WoWMCPNativeBridge PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 target_compile_features(WoWMCPNativeBridge PRIVATE cxx_std_17)
 target_compile_definitions(WoWMCPNativeBridge PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 set_target_properties(WoWMCPNativeBridge PROPERTIES OUTPUT_NAME "WoWMCPNativeBridge")
