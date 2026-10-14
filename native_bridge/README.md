@@ -37,13 +37,13 @@ standalone pipe listener can still run without the GUI.
 Use "Wyślij dane testowe" in the GUI to invoke the bundled
 native_bridge_demo.exe and see sample data appear in both GUI and MCP.
 The name "Demo" identifies these as **synthetic** values, not character data.
-Native game Lua integration is **not** yet implemented.
+Optional **native Lua registration source has been implemented** in adapter/WoWMCPNativeLua.cpp. It builds with WrathClassicAPI for isolated testing; it is **not yet verified inside a running client or Warmane**. See adapter/README.md.
 
 
 This directory is an **opt-in** transport experiment for WoW 3.3.5a. It is
 separate from the production-ready read-only visual addon. It does NOT hook
-or inject into the game and does NOT yet expose a Lua callable function inside
-WoW. Its purpose is to validate the fast path first:
+or inject into the game by default. An optional source-level Lua registration module is provided
+in adapter/, but no in-game validation or anti-cheat compatibility is claimed. Its purpose is to validate the fast path first:
 
     Native Win32 DLL -> Windows Named Pipe -> Python receiver -> MCP tool
 
