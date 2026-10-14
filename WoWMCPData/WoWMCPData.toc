@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: WoW MCP Data
+## Notes: Read-only character, quest, NPC and combat data for a local MCP server.
+## Author: blaszkaaa
+## Version: 0.4.0
+## SavedVariables: WoWMCPExport
+## DefaultState: Enabled
+
+WoWMCPData.lua
