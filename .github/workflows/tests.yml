@@ -19,10 +19,24 @@ jobs:
           cmake -S native_bridge -B build/native-bridge -A Win32
           cmake --build build/native-bridge --config Release
       - name: Check Python syntax
-        run: python -m compileall -q server.py tests native_bridge
+        run: python -m compileall -q server.py desktop_app.py tests native_bridge
       - name: Check Lua syntax
         run: |
           python -m pip install 'luaparser>=4,<5'
           python -c "from pathlib import Path; from luaparser import ast; ast.parse(Path('WoWMCPData/WoWMCPData.lua').read_text(encoding='utf-8'))"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: Build Windows GUI executable
+        run: |
+          python -m pip install 'pyinstaller>=6,<7'
+          pyinstaller --noconfirm --clean --onefile --windowed --name WoW-MCP-Control-Center desktop_app.py
+          Copy-Item build/native-bridge/Release/WoWMCPNativeBridge.dll dist/
+          Copy-Item build/native-bridge/Release/native_bridge_demo.exe dist/
+          Copy-Item native_bridge/README.md dist/INSTRUKCJA.md
+          Compress-Archive -Path dist/* -DestinationPath WoW-MCP-Control-Center-Windows-x86-bridge.zip -Force
+      - name: Upload GUI release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW-MCP-Control-Center-Windows
+          path: WoW-MCP-Control-Center-Windows-x86-bridge.zip
+          retention-days: 30
