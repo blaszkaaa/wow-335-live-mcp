@@ -26,6 +26,22 @@ The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip mu
 
 `read_wow_live_data` reports `age_seconds`. Trainer, merchant, gossip, and quest-dialog details are available while the corresponding window is open and for up to 30 seconds afterward. The combat summary describes the latest fight since the addon was loaded; it is not a full combat log. Large snapshots may omit spells, actions, or bags and mark the omitted section with a `*_truncated` flag. The live strip does not include Questie's map database or a complete history of every quest.
 
+## Desktop Control Center (experimental)
+
+Run **py -3 desktop_app.py** on Windows to open the Polish-language desktop
+dashboard, view native bridge status, character and quest data, and inspect
+transmission diagnostics. The GUI owns the optional native pipe receiver and
+makes its data available to the MCP server via an authenticated, local-only hub.
+
+Set **WOW_MCP_NATIVE_BRIDGE=1** and **WOW_MCP_NATIVE_HUB=1** for your MCP
+server and launch the GUI first. A downloadable Windows executable is built
+by GitHub Actions on this PR. Full setup instructions:
+[native_bridge/README.md](native_bridge/README.md).
+
+**Important:** The native DLL transport is a tested stand-alone prototype,
+not a working in-game Lua DLL integration. Visual addon mode remains available
+and unchanged. Game DLL injection/hooking is not included.
+
 ## Requirements
 
 - Windows 10/11 with a running WoW 3.3.5a client (`Wow.exe`).
