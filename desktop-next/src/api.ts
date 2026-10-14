@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Dashboard } from "./types";
-type Action = "dashboard" | "refresh" | "demo" | "get_settings" | "set_settings";
+type Action = "dashboard" | "refresh" | "launch" | "demo" | "get_settings" | "set_settings";
 export async function backend(action: Action, payload?: Record<string,unknown>): Promise<any> {
   return invoke("backend_api", {action,payload:payload ?? null});
 }
