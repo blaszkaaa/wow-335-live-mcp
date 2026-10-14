@@ -39,7 +39,9 @@ automatycznie. Tauri komunikuje się z nią wyłącznie przez lokalne API.
 
 ## Ważne
 
-DLL z repozytorium jest eksperymentalnym transportem. Nie została jeszcze
-podłączona do Lua wewnątrz WoW ani przetestowana pod antycheatem Warmane.
-Nie wstrzykuj jej do procesu Wow.exe. Prawdziwe dane są pobierane przez addon
-WoWMCPData; aplikacja nie steruje postacią.
+Dodano opcjonalny adapter C++ rejestrujący WoWMCP.Publish(json) w Lua
+przez WrathClassicAPI. Kod kompiluje się jako Win32, ale nie jest jeszcze
+zweryfikowany w działającym kliencie WoW i nie wolno zakładać zgodności z
+antycheatem Warmane. Nie wstrzykuj DLL do WoW na serwerach bez zgody.
+Domyślnie odczyt nadal działa przez wizualny addon WoWMCPData.
+Dokumentacja: native_bridge/adapter/README.md.
