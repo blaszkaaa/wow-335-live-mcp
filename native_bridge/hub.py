@@ -49,8 +49,9 @@ class NativeHubClient:
 
 
 class NativeHubServer:
-    def __init__(self, receiver, discovery_file=DISCOVERY_FILE):
+    def __init__(self, receiver, discovery_file=DISCOVERY_FILE, dashboard=None):
         self.receiver = receiver
+        self.dashboard = dashboard
         self.discovery_file = Path(discovery_file)
         self.token = secrets.token_hex(32)
         self._httpd = None
@@ -75,8 +76,48 @@ class NativeHubServer:
                     payload = hub.receiver.status()
                 elif self.path == "/v1/snapshot":
                     payload = hub.receiver.snapshot()
+                elif self.path == "/v2/dashboard" and hub.dashboard is not None:
+                    payload = hub.dashboard.dashboard()
+                elif self.path == "/v2/settings" and hub.dashboard is not None:
+                    payload = hub.dashboard.get_settings()
                 else:
                     self.send_error(404)
+                    return
+                encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
+            def do_POST(self):
+                provided = self.headers.get("X-WoWMCP-Token", "")
+                if not hmac.compare_digest(provided, hub.token):
+                    self.send_error(403)
+                    return
+                if hub.dashboard is None:
+                    self.send_error(404)
+                    return
+                size = self.headers.get("Content-Length")
+                try:
+                    if size is None or not 0 <= int(size) <= 4096:
+                        raise ValueError("Request too large")
+                    raw = self.rfile.read(int(size))
+                    body = json.loads(raw or b"{}")
+                    if not isinstance(body, dict):
+                        raise ValueError("Expected JSON object")
+                    if self.path == "/v2/refresh" and not body:
+                        payload = hub.dashboard.request_refresh()
+                    elif self.path == "/v2/demo" and not body:
+                        payload = hub.dashboard.show_demo()
+                    elif self.path == "/v2/settings":
+                        payload = hub.dashboard.set_settings(body)
+                    else:
+                        self.send_error(404)
+                        return
+                except (ValueError, UnicodeError, KeyError) as exc:
+                    self.send_error(400, str(exc)[:200])
                     return
                 encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
