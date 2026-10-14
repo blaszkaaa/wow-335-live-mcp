@@ -1,0 +1,54 @@
+name: Experimental Lua DLL (offline only)
+
+on:
+  push:
+    paths:
+      - "native_bridge/adapter/**"
+      - "WoWMCPData/WoWMCPData.lua"
+      - "tests/test_native_lua_adapter.py"
+      - ".github/workflows/native-lua.yml"
+  pull_request:
+    paths:
+      - "native_bridge/adapter/**"
+      - "WoWMCPData/WoWMCPData.lua"
+      - "tests/test_native_lua_adapter.py"
+      - ".github/workflows/native-lua.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  win32:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check addon Lua syntax
+        shell: pwsh
+        run: |
+          python -m pip install "luaparser>=4,<5"
+          python -c "from luaparser import ast; from pathlib import Path; ast.parse(Path('WoWMCPData/WoWMCPData.lua').read_text(encoding='utf-8'))"
+      - name: Build offline 3.3.5a native Lua adapter
+        shell: pwsh
+        run: ./native_bridge/adapter/build-offline.ps1
+      - name: Package GPL complete corresponding sources for offline review
+        shell: pwsh
+        run: |
+          $work = "build/wowmcp-native-lua"
+          $source = "$work/WrathClassicAPI"
+          $out = "$work/package"
+          New-Item -ItemType Directory -Path "$out/modified-source" -Force | Out-Null
+          Copy-Item "$work/build/Release/WrathClassicAPI.dll" "$out/WrathClassicAPI-offline-with-WoWMCP.dll"
+          foreach ($name in @("src", "cmake", "AddOns", "external", "CMakeLists.txt", "LICENSE", ".gitmodules")) {
+            Copy-Item "$source/$name" "$out/modified-source/" -Recurse -Force
+          }
+          Copy-Item native_bridge/adapter/build-offline.ps1 "$out/build-offline.ps1"
+          Copy-Item native_bridge/adapter/README.md "$out/README.md"
+          Copy-Item WoWMCPData/WoWMCPData.lua "$out/WoWMCPData.lua"
+          Compress-Archive -Path "$out/*" -DestinationPath "WowMCP-Lua-Bridge-OFFLINE-ONLY.zip" -CompressionLevel Optimal -Force
+      - name: Upload offline developer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WowMCP-Lua-Bridge-OFFLINE-ONLY
+          path: WowMCP-Lua-Bridge-OFFLINE-ONLY.zip
+          retention-days: 14
