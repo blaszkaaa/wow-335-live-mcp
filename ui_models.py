@@ -33,7 +33,7 @@ def source_label(snapshot):
     if snapshot.get("source") == "WoW addon visual data strip":
         return "Addon WoW · odczyt na żądanie"
     if is_demo(snapshot):
-        return "DEMO · dane testowe, nie z gry"
+        return "DEMO · dane demonstracyjne, nie z gry"
     return "DLL · dane natywne (eksperymentalne)"
 
 
