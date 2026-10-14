@@ -89,6 +89,8 @@ class ControlCenter(ctk.CTk):
         self._load_settings()
         self.auto_enabled = BooleanVar(value=False)
         self.next_read = 0
+        self.next_game_check = time.monotonic() + 15
+        self.last_native_sequence = None
         self._query = ""
         self._quest_filter = "Wszystkie"
         self.snapshot = {"available": False}
@@ -494,6 +496,10 @@ class ControlCenter(ctk.CTk):
                 self._log(item)
         native = self.receiver.snapshot()
         self.status = self.receiver.status()
+        sequence = native.get("sequence")
+        if native.get("available") and sequence != self.last_native_sequence:
+            self.last_native_sequence = sequence
+            self._log(f"Odebrano pakiet DLL #{sequence}.")
         self.snapshot = select_snapshot(native, self._visual)
         live = bool(self.snapshot.get("available"))
         self.connection.configure(
@@ -510,8 +516,12 @@ class ControlCenter(ctk.CTk):
                     self.render()
             else:
                 self.render()
-        if self.auto_enabled.get() and time.monotonic() >= self.next_read:
-            self.next_read = time.monotonic() + 30
+        now = time.monotonic()
+        if now >= self.next_game_check:
+            self.next_game_check = now + 15
+            self._check_game()
+        if self.auto_enabled.get() and now >= self.next_read:
+            self.next_read = now + 30
             if self._game.get("game_running") and not self._reading:
                 self.read_game()
         self.after(950, self._tick)
