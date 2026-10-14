@@ -47,7 +47,9 @@ def source_label(snapshot):
         return "Brak świeżych danych"
     if snapshot.get("source") == "WoW addon visual data strip":
         return "Odczyt z addonu WoW — na żądanie"
-    if snapshot.get("data", {}).get("character", {}).get("name") == "Demo":
+    data = snapshot.get("data") or {}
+    character = data.get("character") if isinstance(data, dict) else {}
+    if isinstance(character, dict) and character.get("name") == "Demo":
         return "Dane demonstracyjne — NIE z WoW"
     return "Dane z eksperymentalnego kanału DLL"
 
