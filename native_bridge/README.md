@@ -1,5 +1,45 @@
 # Experimental native DLL bridge (prototype)
 
+## Desktop application: WoW MCP Control Center
+
+**Windows GUI** (Polish interface, no third-party GUI dependencies):
+
+    py -3 desktop_app.py
+
+The interface includes Dashboard, Character, Quests, Diagnostics and Settings.
+It starts the native named-pipe receiver and an authenticated read-only HTTP
+status/snapshot hub bound to 127.0.0.1 with a fresh random token. Token discovery
+is stored at %LOCALAPPDATA%\WoWMCP\control-center.json, normally accessible only
+through the current Windows profile; the file is deleted when the GUI exits.
+Do not expose that token or HTTP endpoint to other machines.
+
+Build a Windows GUI executable:
+
+    py -3 -m pip install pyinstaller
+    pyinstaller --onefile --windowed --name WoW-MCP-Control-Center desktop_app.py
+
+GitHub Actions also produces a **WoW-MCP-Control-Center-Windows** artifact with
+the GUI .exe, compiled DLL and standalone demo executable. Extract the ZIP
+before running. The GUI itself does NOT require a working game hook.
+
+**Start GUI first**, then configure your existing MCP client with:
+
+    WOW_GAME_DIR=C:\path\to\World of Warcraft 3.3.5a
+    WOW_MCP_NATIVE_BRIDGE=1
+    WOW_MCP_NATIVE_HUB=1
+
+Restart the MCP connection. The MCP tools "wow_native_status" and
+"read_wow_native_data" will connect to the GUI. In this mode the MCP server
+will not create a competing native telemetry pipe. With the GUI closed, the
+tools report unavailable. If WOW_MCP_NATIVE_HUB is unset, the legacy
+standalone pipe listener can still run without the GUI.
+
+Use "Wyślij dane testowe" in the GUI to invoke the bundled
+native_bridge_demo.exe and see sample data appear in both GUI and MCP.
+The name "Demo" identifies these as **synthetic** values, not character data.
+Native game Lua integration is **not** yet implemented.
+
+
 This directory is an **opt-in** transport experiment for WoW 3.3.5a. It is
 separate from the production-ready read-only visual addon. It does NOT hook
 or inject into the game and does NOT yet expose a Lua callable function inside
