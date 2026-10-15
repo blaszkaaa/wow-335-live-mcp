@@ -129,6 +129,9 @@ class DesktopState:
                 with self._lock:
                     self._launch_state = "already_running"
                     self._launch_message = (
+                        "Zamknij działającą grę i uruchom WoW ponownie w trybie DLL. "
+                        "LichLoader musi wystartować przed grą."
+                        if mode == "native" else
                         "WoW już działa. " +
                         ("Wpisz /reload, aby wczytać zaktualizowany addon."
                          if result.changed else "Addon jest gotowy.")
