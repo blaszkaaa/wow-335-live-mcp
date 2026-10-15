@@ -559,98 +559,13 @@ end)
 SLASH_WOWMCPDATA1 = "/wowmcp"
 SlashCmdList.WOWMCPDATA = function()
     collect()
-    DEFAULT_CHAT_FRAME:AddMessage("WoW MCP: dane zebrane. Wpisz /reload, aby zapisać je do pliku dla ChatGPT.")
+    DEFAULT_CHAT_FRAME:AddMessage("WoW MCP: dane zebrane. Połączenie na żywo działa tylko przez DLL. /wowmcpnative sprawdzi stan transmisji.")
 end
 
--- The client cannot send files or network traffic from addon Lua. A small,
--- non-interactive color strip makes current API values available to a local
--- screenshot decoder without touching the WoW process memory.
-local COLS, ROWS, CELL = 32, 16, 3
-local PAGE_BYTES = COLS * ROWS - 14
-local panel = CreateFrame("Frame", "WoWMCPDataPanel", UIParent)
-panel:SetSize(COLS * CELL, ROWS * CELL)
-panel:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 8, 8)
-panel:SetFrameStrata("TOOLTIP")
-panel:SetFrameLevel(1000)
-panel:EnableMouse(false)
-
-local pixels = {}
-for row = 0, ROWS - 1 do
-    for col = 0, COLS - 1 do
-        local pixel = panel:CreateTexture(nil, "OVERLAY")
-        pixel:SetSize(CELL, CELL)
-        pixel:SetPoint("TOPLEFT", panel, "TOPLEFT", col * CELL, -row * CELL)
-        pixels[#pixels + 1] = pixel
-    end
-end
-
-local payload = ""
-local generation = 0
-local page = 1
-local pages = 1
-local checksum = 0
-local elapsed_time = 0
-local refresh_age = 0
+-- No on-screen RGB strip. The addon still collects WoW API data and sends
+-- native snapshots through WoWMCP.Publish when its DLL is available.
+-- The non-visible addon frame handles a lightweight periodic update.
 local native_refresh_age = 0
-
-local function compact_items(items)
-    local result = array()
-    for _, item in ipairs(items) do
-        result[#result + 1] = {
-            item.id or 0, item.name or "", item.count or 0,
-            item.bag or -1, item.slot or 0,
-        }
-    end
-    return result
-end
-
-local function compact_spells(items)
-    local result = array()
-    for _, item in ipairs(items) do
-        result[#result + 1] = { item.name or "", item.rank or "", item.tab or "" }
-    end
-    return result
-end
-
-local function compact_actions(items)
-    local result = array()
-    for _, item in ipairs(items) do
-        result[#result + 1] = {
-            item.slot or 0, item.kind or "", item.id or 0,
-            item.name or "", item.usable and true or false, item.cooldown or 0,
-        }
-    end
-    return result
-end
-
-local function compact_skills(items)
-    local result = array()
-    for _, item in ipairs(items) do
-        result[#result + 1] = { item.name or "", item.rank or 0, item.maximum or 0 }
-    end
-    return result
-end
-
-local function compact_quests(quests)
-    local result = array()
-    for _, quest in ipairs(quests) do
-        result[#result + 1] = {
-            id = quest.id,
-            title = quest.title,
-            level = quest.level,
-            complete = quest.complete,
-            status = quest.status,
-            ready_to_turn_in = quest.ready_to_turn_in,
-            failed = quest.failed,
-            watched = quest.watched,
-            required_money_copper = quest.required_money_copper,
-            daily = quest.daily,
-            suggested_group = quest.suggested_group,
-            objectives = quest.objectives,
-        }
-    end
-    return result
-end
 
 -- Native bridge is optional. It exists only when a compatible, user-approved
 -- WrathClassicAPI extension has registered WoWMCP.Publish in Lua.
@@ -719,7 +634,7 @@ end
 SLASH_WOWMCPNATIVE1 = "/wowmcpnative"
 SlashCmdList.WOWMCPNATIVE = function()
     if not native_available() then
-        DEFAULT_CHAT_FRAME:AddMessage("WoW MCP Native: brak funkcji DLL. Dziala tryb wizualny.")
+        DEFAULT_CHAT_FRAME:AddMessage("WoW MCP Native: brak funkcji DLL. Sprawdz czy uruchomiono gre przez LichLoader.")
     else
         DEFAULT_CHAT_FRAME:AddMessage("WoW MCP Native: " ..
             (native_last_ok and "ostatni pakiet wyslany" or "odbiornik niedostepny") ..
@@ -728,101 +643,20 @@ SlashCmdList.WOWMCPNATIVE = function()
     end
 end
 
-local function refresh_payload()
-    collect()
-    generation = (generation + 1) % 256
-    local live = {
-        wire_version = 3,
-        captured_at = export.captured_at,
-        character = export.character,
-        location = export.location,
-        target = export.target,
-        pet = export.pet,
-        quests = compact_quests(export.quests or {}),
-        quest_log = export.quest_log,
-        bags = compact_items(export.bags or {}),
-        equipment = compact_items(export.equipment or {}),
-        spells = compact_spells(export.spells or {}),
-        actions = compact_actions(export.actions or {}),
-        skills = compact_skills(export.skills or {}),
-        stats = export.stats,
-        talents = export.talents,
-        group = export.group,
-        buffs = export.buffs,
-        debuffs = export.debuffs,
-        interaction = export.interaction,
-        combat_summary = export.combat_summary,
-    }
-    payload = encode(live, true)
-    if #payload > 24000 then
-        live.spells = nil
-        live.spells_truncated = true
-        payload = encode(live, true)
-    end
-    if #payload > 24000 then
-        live.actions = nil
-        live.actions_truncated = true
-        payload = encode(live, true)
-    end
-    if #payload > 24000 then
-        live.bags = nil
-        live.bags_truncated = true
-        payload = encode(live, true)
-    end
-    if #payload > 24000 then payload = encode({ error = "Dane przekraczaja limit paska MCP." }, true) end
-    pages = math.max(1, math.ceil(#payload / PAGE_BYTES))
-    checksum = 0
-    for index = 1, #payload do
-        checksum = (checksum + string.byte(payload, index)) % 65536
-    end
-end
-
-local function render_page()
-    local offset = (page - 1) * PAGE_BYTES
-    local fragment = string.sub(payload, offset + 1, offset + PAGE_BYTES)
-    local bytes = {
-        87, 77, 67, 80, -- WMCP
-        1, generation, page, pages,
-        #fragment % 256, math.floor(#fragment / 256),
-        #payload % 256, math.floor(#payload / 256),
-        checksum % 256, math.floor(checksum / 256),
-    }
-    for index = 1, #fragment do
-        bytes[#bytes + 1] = string.byte(fragment, index)
-    end
-    for index = 1, #pixels do
-        local byte = bytes[index] or 0
-        pixels[index]:SetTexture(math.floor(byte / 16) / 15, (byte % 16) / 15, 1)
-    end
-end
-
-panel:SetScript("OnUpdate", function(_, elapsed)
-    elapsed_time = elapsed_time + elapsed
-    refresh_age = refresh_age + elapsed
+-- Keep the addon frame active without creating or drawing any textures.
+-- Do not hide it: OnUpdate would stop executing on hidden frames.
+addon:SetScript("OnUpdate", function(_, elapsed)
     native_refresh_age = native_refresh_age + elapsed
-    -- Native snapshots do not wait for all pages of the legacy visual strip.
-    if native_refresh_age >= 3 and native_available() then
-        native_refresh_age = 0
+    if native_refresh_age < 3 then return end
+    native_refresh_age = 0
+    if native_available() then
         collect()
         publish_native()
     end
-    if elapsed_time < 0.18 then return end
-    elapsed_time = 0
-    page = page + 1
-    if page > pages then
-        if refresh_age >= 3 then
-            refresh_payload()
-            refresh_age = 0
-        end
-        page = 1
-    end
-    render_page()
 end)
 
 addon:HookScript("OnEvent", function(_, event)
     if event == "PLAYER_ENTERING_WORLD" then
-        refresh_payload()
-        page = 1
-        render_page()
+        native_refresh_age = 3
     end
 end)
