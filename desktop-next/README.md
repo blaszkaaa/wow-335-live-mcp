@@ -18,11 +18,21 @@ Usługa desktopowa automatycznie uruchamia lokalny hub z losowym tokenem. Oddzie
 
 Nadal trzeba osobno skonfigurować lokalny serwer MCP lub prywatne połączenie z ChatGPT; samo uruchomienie programu nie rejestruje go w zdalnej sesji.
 
-## DLL: ważne ograniczenie
+## DLL — uruchamianie przez przygotowany LichLoader
 
-**Zielona etykieta DLL** jest pokazywana wyłącznie wtedy, gdy do aplikacji docierają rzeczywiste dane postaci przez eksperymentalny Named Pipe. Uruchomiony odbiornik bez pakietów to **Brak danych z DLL**, a nie „połączono”.
+**Tryb DLL jest opcjonalny.** Aplikacja nie pobiera ani nie instaluje zewnętrznego loadera automatycznie; może uruchomić istniejący, prawidłowo skonfigurowany `LichLoader.exe` zamiast zwykłego `Wow.exe`.
 
-Repo zawiera działający protokół Named Pipe, testowy natywny nadajnik Win32 oraz eksperymentalny adapter Lua→DLL oparty o WrathClassicAPI. Test transportu lub kompilacja adaptera **nie potwierdzają**, że biblioteka działa w Twojej grze. Aplikacja **nie ładuje ani nie wstrzykuje DLL** do klienta Warmane. Test w rzeczywistym kliencie wymaga autoryzowanego środowiska; tego nie da się zweryfikować w CI. Zwykły addon pozostaje obsługiwanym rozwiązaniem.
+### Przygotowanie plików (tylko w środowisku z odpowiednią zgodą)
+
+1. Pobierz `LichLoader.exe` i `LichCore.dll` z [oficjalnej strony wydań LichLoader](https://github.com/brues-code/LichLoader/releases). Umieść oba pliki obok `Wow.exe`.
+2. Pobierz wynik workflow **Experimental Lua DLL (offline only)** z Actions tego repozytorium. W pliku ZIP jest zbudowany adapter `WrathClassicAPI-offline-with-WoWMCP.dll`. Skopiuj go do folderu `dll` obok gry pod nazwą `WoWMCPNativeLua.dll`. Nie używaj zwykłej DLL WrathClassicAPI bez modułu WoWMCP.
+3. W katalogu gry utwórz lub uzupełnij `lichloader.txt` o pojedynczą linię `dll\WoWMCPNativeLua.dll`. Zachowaj pozostałe wpisy i pliki.
+4. W WoW Connect otwórz **Ustawienia → Sposób uruchamiania → Przez LichLoader (DLL)**. Aplikacja sprawdzi, czy klient i pliki wykonawcze są w formacie Win32 x86 oraz czy konfiguracja istnieje.
+5. Zamknij działające WoW i kliknij **Uruchom WoW z DLL**. Wejdź na postać i wpisz `/wowmcpnative` w czacie gry. Gdy połączenie działa, status powinien pokazać poprawnie wysłany pakiet, a ekran WoW Connect wyświetli „DLL · Przesyła dane”.
+
+**Ważne:** sama obecność plików lub start LichLoadera nie stanowią dowodu działania DLL. Status zmienia się dopiero po odebraniu świeżych danych postaci. Ten tryb wymaga rzeczywistego testu na wybranym kliencie. W razie niepowodzenia wybierz **Standardowy** — odczyt przez addon nadal działa.
+
+Tryb DLL może być niezgodny z zasadami konkretnego serwera i jego zabezpieczeniami. Nie jest dostarczany mechanizm ich obchodzenia.
 
 ## Kompilacja Windows
 
