@@ -35,11 +35,13 @@ odbiornik MCP i uruchamia grę. Jeśli WoW już działa, nie uruchamia
 drugiej instancji i informuje, czy wymagane jest `/reload`.
 Na głównym ekranie pozostają tylko przyciski uruchomienia i odczytu postaci; zmianę folderu znajdziesz pod ikoną ustawień.
 
-Opcjonalny tryb **Przez LichLoader (DLL)** może uruchomić grę przez
-wcześniej zainstalowany zewnętrzny LichLoader.exe. Aplikacja nie
-pobiera ani nie instaluje tego programu samodzielnie, sprawdza wymagane
-pliki i nie obchodzi zabezpieczeń klienta.
-Zobacz [instrukcję przygotowania trybu DLL](desktop-next/README.md).
+Opcjonalny tryb **Przez LichLoader (DLL)** pozwala jednym kliknięciem
+przygotować i uruchomić natywną integrację. Instalator Windows zawiera
+sprawdzoną wersję LichLoadera i zbudowany adapter Lua→DLL; przy pierwszym
+uruchomieniu aplikacja instaluje te składniki, zachowuje obce pliki i
+istniejącą konfigurację oraz uruchamia grę. Tryb jest dobrowolny i nie
+obchodzi zabezpieczeń klienta.
+[Instrukcja automatycznego trybu DLL](desktop-next/README.md).
 
 ## Opcjonalna integracja Lua → DLL (offline)
 
@@ -57,10 +59,9 @@ uruchomienie w samym Wow.exe wymaga odrębnego testu i zgody operatora.
 
 ## Nowa aplikacja desktopowa (zalecana)
 
-**WoW MCP Control Center 3.0** to aplikacja Windows oparta na **Tauri 2,
-React i TypeScript** zamiast Python/Tkinter. Ma własny spójny system
-projektowy, interfejs w języku polskim, pulpit statystyk i ekrany
-postaci, questów, ekwipunku, ustawień oraz diagnostyki.
+**WoW Connect** to minimalistyczna aplikacja Windows (Tauri 2 + React),
+która uruchamia grę i wyświetla podstawowe informacje o postaci, zadaniach
+i stanie połączenia MCP. Opcjonalny tryb DLL można wybrać w ustawieniach.
 
 Tauri uruchamia usługę Python (PyInstaller sidecar), która nadal obsługuje
 MCP, addon i eksperymentalny kanał DLL. Nie trzeba osobno uruchamiać
@@ -75,8 +76,9 @@ Odczyt wizualny pozostaje rozwiązaniem domyślnym i zapasowym.
 [Instrukcja testowa native Lua](native_bridge/adapter/README.md).
 
 **Zielony status DLL w WoW Connect oznacza rzeczywiste odebrane pakiety,
-nie tylko aktywny odbiornik. Tryb DLL wymaga gotowej, osobno
-zainstalowanej konfiguracji LichLoader.**
+nie tylko aktywny odbiornik. Tryb DLL automatycznie przygotowuje wymagane
+pliki z własnego instalatora, ale nadal wymaga autoryzowanego testu na
+prawdziwym kliencie.**
 
 ### Poprzednie GUI (tryb legacy)
 
