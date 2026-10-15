@@ -65,21 +65,24 @@ class GameLauncherTests(TestCase):
             game, src = self.make_fixture(temp)
             state = DesktopState(NativePipeReceiver(), Path(temp) / "settings.json")
             state.set_settings({"game_dir": str(game)})
-            captured = []
-            def install(path):
-                captured.append(("install", path))
+            events = []
+            def addon(path):
+                events.append("addon")
                 return install_addon(path, src)
-            def start(path):
-                captured.append(("launch", path))
-            with patch("desktop_service.install_addon", side_effect=install), \
+            def native(path):
+                events.append("native")
+            def launch(path, mode=None):
+                events.append("launch:" + str(mode))
+            with patch("desktop_service.install_addon", side_effect=addon), \
+                 patch("desktop_service.setup_native_runtime", side_effect=native), \
                  patch("desktop_service.find_game_running", return_value=False), \
-                 patch("desktop_service.launch_wow", side_effect=start):
+                 patch("desktop_service.launch_wow", side_effect=launch):
                 response = state.request_launch()
                 self.assertTrue(response["started"])
                 limit = time.monotonic() + 4
                 while state.dashboard()["launch"]["busy"] and time.monotonic() < limit:
                     time.sleep(0.015)
-            self.assertEqual([name for name, _ in captured], ["install", "launch"])
+            self.assertEqual(events, ["addon", "native", "launch:native"])
             self.assertEqual(state.dashboard()["launch"]["status"], "started")
             self.assertTrue(state.dashboard()["game"]["addon_installed"])
 

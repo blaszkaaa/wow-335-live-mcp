@@ -488,26 +488,39 @@ def read_wow_native_data():
 
 
 def read_best_wow_live_data():
-    """Use fresh real native telemetry from the desktop hub, else visual data.
+    """Read only fresh actual game snapshots from the DLL named-pipe hub.
 
-    Synthetic frames from the DLL smoke-test sender must never be treated as
-    an in-game character. Native data without an actual character is rejected.
+    The old RGB screenshot transport is intentionally disabled. A running
+    desktop UI does not guarantee this separate MCP process is connected;
+    failures must be explicit instead of silently returning a saved snapshot.
     """
     native = read_wow_native_data()
     data = native.get("data")
     character = data.get("character") if isinstance(data, dict) else None
-    if (native.get("available") and native.get("session") != "native-demo"
-            and isinstance(character, dict) and character.get("name")
-            and character.get("name") != "Demo"):
+    valid = (
+        native.get("available") is True and
+        native.get("session") != "native-demo" and
+        isinstance(character, dict) and bool(character.get("name")) and
+        character.get("name") != "Demo"
+    )
+    if valid:
         return native
-    return live_game_data()
+    return {
+        "available": False, "source": "native_dll", "data": None,
+        "age_seconds": native.get("age_seconds"),
+        "transport": native.get("transport"),
+        "reason": native.get("reason") or
+                  "Brak świeżych danych z DLL. Uruchom WoW Connect oraz grę przez "
+                  "LichLoader i sprawdź /wowmcpnative. MCP potrzebuje osobnego "
+                  "połączenia z ChatGPT.",
+    }
 
 
 TOOLS = [
     {"name": "wow_status", "description": "Check whether the local WoW 3.3.5a window is ready for an on-demand screenshot. Read-only.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
-    {"name": "wow_native_status", "description": "Experimental native named-pipe receiver status. Opt in with WOW_MCP_NATIVE_BRIDGE=1. Optional offline WrathClassicAPI Lua adapter supported; do not use on unauthorized online clients.",
+    {"name": "wow_native_status", "description": "Local native DLL receiver status. Uses authenticated WoW Connect hub automatically when reachable; no separate environment flags are required.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
     {"name": "read_wow_native_data", "description": "Read the most recent validated snapshot from an experimental local DLL pipe. Unavailable if the receiver is disabled or the frame is stale (>30s). Optional native Lua adapter requires explicit separate game-side installation and testing.",
@@ -525,7 +538,7 @@ TOOLS = [
     {"name": "read_wow_combat_log", "description": "Read the latest raw WoW combat-log lines if /combatlog is enabled in game. Report file age; a missing or old file is not live combat data.",
      "inputSchema": {"type": "object", "properties": {"max_lines": {"type": "integer", "minimum": 1, "maximum": 100}}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
-    {"name": "read_wow_live_data", "description": "Read current structured WoW 3.3.5a data. Prefer fresh validated native Lua telemetry from WoW Connect when available, otherwise use the WoWMCPData color strip: character stats, quests with turn-in status, bags, spells, action bar, open trainer/merchant/gossip/quest dialog, and recent player combat summary. Interaction data exists only when an NPC window is open or for 30 seconds after closing. Combat summary is the last fight, not a complete combat log. Report age and missing fields honestly. Read-only and on demand.",
+    {"name": "read_wow_live_data", "description": "Read live character stats, quests, bags, spells, talents and interaction data exclusively from fresh, validated WoW Connect native DLL telemetry. No screen capture or RGB visual fallback. If the native hub cannot be reached, report an explicit unavailable state and instruct how to reconnect MCP.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
 ]
@@ -536,10 +549,14 @@ def reply(req):
     request_id = req.get("id")
     if request_id is None:
         return None
+    if method in ("initialize", "tools/list", "tools/call"):
+        hub = NativeHubClient.discover()
+        if hub is not None:
+            hub.announce_mcp()
     try:
         if method == "initialize":
             result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
-                      "serverInfo": {"name": "wow-335-live-mcp", "version": "0.4.0"}}
+                      "serverInfo": {"name": "wow-335-live-mcp", "version": "0.6.0"}}
         elif method == "ping":
             result = {}
         elif method == "tools/list":

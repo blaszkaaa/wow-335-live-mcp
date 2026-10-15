@@ -17,17 +17,19 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertFalse(data["available"])
             self.assertFalse(data["game"]["installed"])
             self.assertEqual(data["metrics"]["quest_count"], 0)
-            self.assertEqual(state.request_refresh()["reason"], "game_dir_missing")
+            self.assertFalse(state.request_refresh()["available"])
 
-    def test_synthetic_preview_is_labeled_demo(self):
+    def test_synthetic_native_packets_are_never_reported_as_connected(self):
         with tempfile.TemporaryDirectory() as tmp:
-            state = DesktopState(NativePipeReceiver(), Path(tmp) / "settings.json")
-            state.show_demo()
-            data = state.dashboard()
-            self.assertTrue(data["available"])
-            self.assertTrue(data["demo"])
-            self.assertIn("DEMO", data["source_label"])
-            self.assertEqual(data["metrics"]["quest_count"], 2)
+            receiver = NativePipeReceiver()
+            state = DesktopState(receiver, Path(tmp) / "settings.json")
+            fake = {"available": True, "session": "native-demo",
+                    "data": {"character": {"name": "Demo"}}}
+            with patch.object(receiver, "snapshot", return_value=fake):
+                data = state.dashboard()
+            self.assertFalse(data["available"])
+            self.assertFalse(data["demo"])
+            self.assertIsNone(data["data"])
 
     def test_settings_folder_validation(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -55,7 +57,8 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertEqual(reopened.get_settings()["launch_mode"], "native")
             with self.assertRaises(ValueError):
                 reopened.set_settings({"launch_mode": "unknown"})
-            reopened.set_settings({"launch_mode": "addon"})
+            with self.assertRaises(ValueError):
+                reopened.set_settings({"launch_mode": "addon"})
             self.assertEqual(reopened.get_settings()["game_dir"], str(folder))
 
     def test_game_process_check_is_async_and_cached(self):
@@ -103,11 +106,14 @@ class DesktopServiceTests(unittest.TestCase):
             try:
                 client = NativeHubClient.discover(Path(tmp) / "control.json")
                 self.assertFalse(client._get("/v2/dashboard")["available"])
-                response = client._post("/v2/demo", {})
-                self.assertTrue(response["demo"])
-                self.assertTrue(client._get("/v2/dashboard")["demo"])
+                self.assertIsNone(client._post("/v2/demo", {}))
+                self.assertFalse(client._get("/v2/dashboard")["available"])
                 self.assertEqual(client._get("/v2/settings")["game_dir"], "")
                 self.assertIsNone(NativeHubClient(client.port, "x" * 64)._post("/v2/demo", {}))
+                self.assertFalse(state.dashboard()["mcp_client"]["recent"])
+                self.assertTrue(client.announce_mcp()["recorded"])
+                self.assertTrue(state.dashboard()["mcp_client"]["recent"])
+                self.assertEqual(state.dashboard()["mcp_client"]["requests"], 1)
             finally:
                 server.stop()
 

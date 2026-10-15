@@ -6,6 +6,8 @@ on:
     paths:
       - "desktop-next/**"
       - "desktop_service.py"
+      - "native_mcp_stdio.py"
+      - "server.py"
       - "game_launcher.py"
       - "WoWMCPData/**"
       - "native_bridge/**"
@@ -13,6 +15,7 @@ on:
       - "tests/test_desktop_service.py"
       - "tests/test_game_launcher.py"
       - "tests/test_native_setup.py"
+      - "tests/test_native_mcp_stdio.py"
       - ".github/workflows/tauri.yml"
   pull_request:
     paths:
@@ -96,9 +99,44 @@ jobs:
           retention-days: 30
       - name: Package background service
         run: |
-          pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
+          pyinstaller --clean --noconfirm --onefile --windowed --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
           New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries | Out-Null
           Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
+      - name: Build standalone native MCP client bridge
+        run: |
+          pyinstaller --clean --noconfirm --onefile --console --name wow-mcp-stdio native_mcp_stdio.py
+          Copy-Item dist/wow-mcp-stdio.exe desktop-next/src-tauri/binaries/wow-mcp-stdio-x86_64-pc-windows-msvc.exe
+      - name: Smoke-test packaged MCP stdio protocol
+        shell: pwsh
+        run: |
+          $requests = @(
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"read_wow_live_data","arguments":{}}}'
+          )
+          $responses = @($requests | & "./dist/wow-mcp-stdio.exe")
+          if ($LASTEXITCODE -ne 0 -or $responses.Count -ne 3) {
+            throw "MCP stdio executable did not return three JSON-RPC replies"
+          }
+          $handshake = $responses[0] | ConvertFrom-Json
+          $catalog = $responses[1] | ConvertFrom-Json
+          $snapshot = $responses[2] | ConvertFrom-Json
+          if ($handshake.result.serverInfo.name -ne "wow-335-native-mcp") {
+            throw "MCP initialize handshake failed"
+          }
+          if (-not ($catalog.result.tools.name -contains "read_wow_live_data")) {
+            throw "MCP tools/list missing live tool"
+          }
+          if (-not $snapshot.result.content[0].text) {
+            throw "MCP tools/call did not return a structured response"
+          }
+      - name: Upload standalone MCP bridge
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW-MCP-Native-STDIO-Windows
+          path: dist/wow-mcp-stdio.exe
+          if-no-files-found: error
+          retention-days: 30
       - name: Prepare Tauri icons
         run: python desktop-next/scripts/generate_icons.py
       - name: Install frontend packages

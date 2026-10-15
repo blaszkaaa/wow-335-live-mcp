@@ -112,18 +112,18 @@ class McpTests(unittest.TestCase):
                     self.assertEqual(result["transport"], "desktop_gui_hub")
                     self.assertTrue(server.wow_native_status()["available"])
 
-    def test_demo_native_packets_do_not_replace_real_game_read(self):
+    def test_demo_native_packets_are_rejected_without_visual_fallback(self):
         hub = mock.Mock()
         hub.snapshot.return_value = {
             "available": True, "session": "native-demo",
             "data": {"character": {"name": "Demo"}},
         }
-        visual = {"available": True, "source": "WoW addon visual data strip",
-                  "data": {"character": {"name": "My Real Character"}}}
         with mock.patch.object(server.NativeHubClient, "discover", return_value=hub):
-            with mock.patch.object(server, "live_game_data", return_value=visual) as capture:
-                self.assertEqual(server.read_best_wow_live_data(), visual)
-                capture.assert_called_once_with()
+            with mock.patch.object(server, "live_game_data") as capture:
+                result = server.read_best_wow_live_data()
+                self.assertFalse(result["available"])
+                self.assertIsNone(result["data"])
+                capture.assert_not_called()
 
     def test_status_uses_configured_game_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
