@@ -1,50 +1,35 @@
-# WoW Connect 0.6 — ciemny interfejs, dane tylko z DLL
+# WoW Connect 0.7 — ciemny motyw, addon RGB, bez DLL
 
-Aplikacja Windows (Tauri 2 + React) pokazuje dane WoW 3.3.5a w ciemnym motywie. Strumień danych jest jeden:
-
-```text
-WoW addon WoWMCPData (bez kwadratu RGB)
-   → WoWMCP.Publish (adapter DLL)
-   → Windows named pipe
-   → lokalna usługa WoW Connect
-   → osobny serwer MCP
-   → skonfigurowany klient MCP / ChatGPT
-```
-
-**Ważne:** addon WoWMCPData nadal musi być włączony, ponieważ zbiera informacje przez API Lua gry. Nie rysuje już kwadratu w lewym dolnym rogu ani nie koduje danych na ekranie. Połączenie DLL wymaga, aby gra była uruchomiona przez dołączony LichLoader. Wybrana wersja 3.3.5a i zasady serwera muszą pozwalać na taki moduł.
+Przywrócono bezpieczny, wcześniej działający odczyt WoW 3.3.5a za pomocą addonu **WoWMCPData**. W lewym dolnym rogu gry pojawia się **kolorowy kwadrat 32×16**, którego piksele aplikacja odczytuje na żądanie. WoW Connect nie wstrzykuje DLL, nie uruchamia LichLoadera i nie modyfikuje Wow.exe.
 
 ## Uruchomienie
 
-1. Pobierz i zainstaluj plik z artefaktu **WoW-MCP-Control-Center-Tauri-Windows** w [GitHub Actions](https://github.com/blaszkaaa/wow-335-live-mcp/actions/workflows/tauri.yml).
-2. Wybierz katalog zawierający `Wow.exe` i kliknij **Uruchom WoW z DLL**.
-3. Program automatycznie aktualizuje addon, dołącza zweryfikowaną wersję LichLoader i swój adapter DLL, przygotowuje `lichloader.txt` i uruchamia klienta.
-4. Wejdź na postać. W WoW Connect powinna pojawić się etykieta **DLL połączona**, a dane postaci powinny odnawiać się bez klikania.
-5. W razie problemu wpisz w grze `/wowmcpnative`. Odpowiedź „ostatni pakiet wyslany” oznacza jedynie lokalną transmisję do usługi.
+1. Zainstaluj najnowszy instalator Windows z [GitHub Actions](https://github.com/blaszkaaa/wow-335-live-mcp/actions/workflows/tauri.yml).
+2. Zamknij poprzednią grę uruchomioną przez LichLoader i WoW Connect. Nowa wersja ignoruje zapisany tryb natywny.
+3. Uruchom WoW Connect, wskaż folder gry z `Wow.exe` i kliknij **Uruchom WoW**.
+4. Program automatycznie instaluje nowy addon WoWMCPData (poprzednią wersję zachowuje jako kopię) oraz uruchamia **bezpośrednio Wow.exe**.
+5. Na ekranie wyboru postaci upewnij się, że addon **WoW MCP Data** jest włączony. Po wejściu do gry powinien pojawić się kolorowy kwadrat **na dole po lewej**.
+6. Nie minimalizuj WoW i nie zasłaniaj kwadratu. Kliknij **Odczytaj postać**; odbiór wszystkich stron kodowanych danych może potrwać kilkanaście sekund.
 
-**Żaden odczyt na żywo nie wraca do paska RGB ani zrzutu ekranu.** Przycisk „Sprawdź DLL” sprawdza stan lokalnego strumienia natywnego, nie uruchamia capture. Nie modyfikujemy samego `Wow.exe`, nie zastępujemy cudzych plików LichLoader i zapisujemy kopie poprzednich adapterów DLL.
+Gdy WoW już działa, kliknięcie uruchomienia jedynie zaktualizuje addon. W takim wypadku wpisz w grze `/reload`, by go odświeżyć.
 
-## MCP i ChatGPT — osobne połączenie
+## Co z pozostałościami po DLL?
 
-Dwie kontrolki w aplikacji pokazują **różne** rzeczy:
+Nowa aplikacja **nie ładuje** LichLoadera ani plików DLL nawet wtedy, gdy pozostały w katalogu gry. Nie usuwa automatycznie cudzych lub wcześniej zainstalowanych plików, aby nie uszkodzić Twojej gry. Jeśli chcesz usunąć poprzednią instalację WoW MCP, gdy gra jest zamknięta, zrób kopię i usuń tylko pliki, które wcześniej dodał WoW Connect: `LichLoader.exe`, `LichCore.dll`, `dll\WoWMCPNativeLua.dll` oraz wpis `dll\WoWMCPNativeLua.dll` w `lichloader.txt`. Nie kasuj plików należących do innych programów/modów. **Sam prawidłowy start przez Wow.exe nie wymaga tego czyszczenia.**
 
-- **DLL:** lokalna usługa otrzymała świeże pakiety z prawdziwej postaci.
-- **MCP:** w ostatnich 90 sekundach do tej usługi zgłosił się lokalny proces MCP obsługujący inicjalizację lub narzędzia. To **nie jest** dowód, że połączyła się chmura ChatGPT.
+## MCP i ChatGPT
 
-Nowy workflow Windows publikuje również artefakt **WoW-MCP-Native-STDIO-Windows** zawierający `wow-mcp-stdio.exe`. To niewielki serwer MCP do wywoływania narzędzi `wow_status`, `wow_native_status` i `read_wow_live_data` wyłącznie przez DLL. Nie wymaga `WOW_GAME_DIR` ani żadnej konfiguracji zrzutów obrazu: wykrywa autoryzowaną lokalną usługę WoW Connect.
+Aplikacja korzysta z lokalnej usługi do pokazywania ostatniego odczytu. Klient MCP może także użyć `read_wow_live_data`, który wykonuje nowy odczyt **widocznego kwadratu** na żądanie. Odczyt ten wymaga prawidłowego okna gry, czasem przełączy fokus WoW, i może potrwać do 20 sekund.
 
-Aby uruchomić **lokalnego klienta obsługującego stdio**, ustaw jego komendę na pełną ścieżkę do `wow-mcp-stdio.exe`. Przykładowa konfiguracja klienta MCP w formacie TOML:
+Windows CI pakuje osobny serwer `wow-mcp-stdio.exe` (artefakt **WoW-MCP-Addon-STDIO-Windows**) z zachowaną nazwą pliku dla istniejącej konfiguracji lokalnego MCP. Przykładowa konfiguracja klientów wspierających stdio:
 
 ```toml
-[mcp_servers.wow_335_native]
+[mcp_servers.wow_335_addon]
 command = 'C:\path\to\wow-mcp-stdio.exe'
 ```
 
-Aby ChatGPT zdalnie korzystał z tego procesu, trzeba **podłączyć lub ponownie skonfigurować wtyczkę/tunel MCP** zgodnie z mechanizmem połączenia danej instalacji. Samo zainstalowanie WoW Connect nie może zmienić ustawień istniejącego konektora ChatGPT. Jeśli ChatGPT pokazuje „MCP server is not initialized”, to jest błąd tego osobnego połączenia, nawet jeśli DLL jest zielona. Po ponownym podłączeniu wtyczki sprawdź `wow_status` i `read_wow_live_data`.
+Połączenie ChatGPT ze zdalną wtyczką/tunelem jest osobną konfiguracją i samo zainstalowanie programu jej nie naprawia. Status MCP w aplikacji informuje o aktywności lokalnego procesu, nie potwierdza automatycznie połączenia z chmurą.
 
-Otwierając zdalny tunel, używaj tylko prywatnego, uwierzytelnionego połączenia. Nie wystawiaj lokalnego endpointu kontrolnego ani pliku `control-center.json` publicznie.
+## Budowanie
 
-## Kompilacja i licencja
-
-CI kompiluje adapter Win32 ze źródeł GPL WrathClassicAPI, weryfikuje archiwum LichLoader `v1.1.0` przez SHA-256, buduje osobno serwis GUI i program MCP stdio oraz publikuje odpowiadające źródła GPL jako **WoWMCP-Native-Corresponding-Source**.
-
-Status „DLL połączona” wymaga rzeczywistych pakietów, ale nie zapewnia zgodności z zasadami serwerów online. Działania w grze ani obchodzenie systemów antycheat nie są częścią tego projektu.
+Windows workflow kompiluje wyłącznie aplikację Tauri, usługę Python i visual MCP stdio; nie pobiera ani nie pakuje bibliotek DLL. Oryginalny kod eksperymentalnego DLL może pozostać w repozytorium do celów archiwalnych, ale jest wyłączony z tej aplikacji.
