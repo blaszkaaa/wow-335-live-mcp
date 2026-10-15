@@ -56,7 +56,7 @@ export default function App() {
     try {
       await backend("set_settings", { launch_mode: mode });
       setNotice(mode === "native"
-        ? "Wybrano tryb DLL. Przed uruchomieniem sprawdź wymagane pliki poniżej."
+        ? "Wybrano tryb DLL. Aplikacja przygotuje wymagane pliki przy uruchomieniu."
         : "Wybrano standardowe uruchamianie WoW.");
       await update();
     } catch (error) {
@@ -76,7 +76,7 @@ export default function App() {
         await backend("set_settings", { game_dir: selected });
       }
       const response = await backend("launch");
-      setNotice(response.started ? "Przygotowuję addon i uruchamiam WoW…" :
+      setNotice(response.started ? "Przygotowuję pliki i uruchamiam WoW…" :
         response.reason === "already_starting" ? "Gra już jest uruchamiana." :
         "Najpierw wskaż prawidłowy folder z Wow.exe.");
       await update();
@@ -106,7 +106,7 @@ export default function App() {
   const native = dashboard.transport;
   const connected = Boolean(dashboard.available && !dashboard.demo);
   const nativeMode = dashboard.launch_mode === "native";
-  const nativeReady = dashboard.native_setup?.ready === true;
+  const nativeReady = dashboard.native_setup?.ready === true || dashboard.native_setup?.bundled === true;
   const dllConnected = Boolean(connected && dashboard.source === "experimental native DLL named pipe" && native?.available);
   const data = connected ? dashboard.data : null;
   const character = data?.character;
@@ -119,7 +119,7 @@ export default function App() {
     : dashboard.read_in_progress ? "Trwa odczyt" : running ? "Gra uruchomiona" : "Niepołączono";
   const subtitle = serviceError ? "Spróbuj uruchomić aplikację ponownie."
     : !configured ? "Wybierz folder z plikiem Wow.exe, aby rozpocząć."
-    : nativeMode && !nativeReady ? dashboard.native_setup?.reason || "Brakuje konfiguracji DLL."
+    : nativeMode && !nativeReady ? "Brak plików DLL w aplikacji. Zainstaluj najnowszą wersję."
     : !running ? "Uruchom grę, następnie wejdź na postać."
     : !connected ? "Włącz addon WoWMCPData i użyj /reload, potem kliknij Odczytaj."
     : "Połączenie z Twoją postacią jest gotowe.";
@@ -205,7 +205,7 @@ export default function App() {
         <section className="connection-footer" aria-label="Źródła danych">
           <div><span className={`mini-dot ${dllConnected ? "good" : ""}`}/><strong>DLL</strong><span>{dllConnected ? "Przesyła dane" : "Brak danych z DLL"}</span></div>
           <div><span className={`mini-dot ${connected && !dllConnected ? "good" : ""}`}/><strong>Addon</strong><span>{dashboard.game?.addon_installed ? "Zainstalowany" : "Nie zainstalowano"}</span></div>
-          <button className="help" title="Status DLL zmienia się po odebraniu prawdziwych danych z gry. Wymagany jest poprawnie zainstalowany zewnętrzny LichLoader." aria-label="Informacja o DLL"><CircleHelp size={16}/></button>
+          <button className="help" title="Tryb DLL sam przygotowuje pliki z instalatora. Status zmienia się dopiero po odebraniu prawdziwych danych z gry." aria-label="Informacja o DLL"><CircleHelp size={16}/></button>
         </section>
 
         {showSettings && <section className="settings" aria-label="Ustawienia gry">
@@ -222,10 +222,11 @@ export default function App() {
               disabled={Boolean(pending)} onClick={() => void changeLaunchMode("native")}>Przez LichLoader (DLL)</button>
           </div>
           {nativeMode && <p className={nativeReady ? "native-ready" : "native-warning"}>
-            {nativeReady ? "Wymagane pliki DLL są obecne. Po uruchomieniu sprawdź stan połączenia."
-              : dashboard.native_setup?.reason || "Wybierz folder gry, aby sprawdzić pliki DLL."}
+            {dashboard.native_setup?.ready ? "Pliki DLL są przygotowane. Możesz uruchomić WoW."
+              : dashboard.native_setup?.bundled ? "Pliki DLL i LichLoader zostaną przygotowane automatycznie przy starcie."
+              : "Brak dołączonych plików DLL. Zainstaluj najnowszą wersję aplikacji."}
           </p>}
-          <p className="settings-note">Tryb DLL uruchamia wyłącznie istniejący LichLoader.exe; aplikacja nie instaluje go ani nie wstrzykuje samodzielnie bibliotek. Rzeczywiste połączenie potwierdza dopiero odbiór danych postaci. Bez DLL działa zwykły addon.</p>
+          <p className="settings-note">Tryb DLL automatycznie kopiuje przygotowany LichLoader i adapter z instalatora, zachowując istniejącą konfigurację i kopię poprzedniej DLL. Wymaga zgodnego klienta Win32 i dozwolonego środowiska. Faktyczne połączenie potwierdza odbiór danych postaci. Bez DLL działa zwykły addon.</p>
         </section>}
       </main>
       <footer>WoW MCP <span>·</span> Tylko lokalny odczyt danych</footer>

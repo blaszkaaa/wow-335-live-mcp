@@ -105,11 +105,13 @@ class GameLauncherTests(TestCase):
             state.set_settings({"game_dir": str(game), "launch_mode": "native"})
             with patch("desktop_service.install_addon", side_effect=lambda p: install_addon(p, src)), \
                  patch("desktop_service.find_game_running", return_value=False), \
+                 patch("desktop_service.setup_native_runtime") as setup, \
                  patch("desktop_service.launch_wow") as launch:
                 self.assertTrue(state.request_launch()["started"])
                 deadline = time.monotonic() + 3
                 while state.dashboard()["launch"]["busy"] and time.monotonic() < deadline:
                     time.sleep(0.015)
+            setup.assert_called_once_with(str(game))
             launch.assert_called_once_with(str(game), mode="native")
             self.assertEqual(state.dashboard()["launch"]["status"], "started")
 
