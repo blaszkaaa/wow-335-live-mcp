@@ -18,21 +18,25 @@ Usługa desktopowa automatycznie uruchamia lokalny hub z losowym tokenem. Oddzie
 
 Nadal trzeba osobno skonfigurować lokalny serwer MCP lub prywatne połączenie z ChatGPT; samo uruchomienie programu nie rejestruje go w zdalnej sesji.
 
-## DLL — uruchamianie przez przygotowany LichLoader
+## DLL — automatyczne przygotowanie i uruchamianie
 
-**Tryb DLL jest opcjonalny.** Aplikacja nie pobiera ani nie instaluje zewnętrznego loadera automatycznie; może uruchomić istniejący, prawidłowo skonfigurowany `LichLoader.exe` zamiast zwykłego `Wow.exe`.
+**Nie trzeba samodzielnie pobierać LichLoadera, kompilować adaptera, kopiować DLL ani edytować `lichloader.txt`.** Wersja instalatora Windows budowana z `.github/workflows/tauri.yml` zawiera potrzebne pliki.
 
-### Przygotowanie plików (tylko w środowisku z odpowiednią zgodą)
+1. Zainstaluj najnowszy instalator Windows **WoW Connect** z GitHub Actions.
+2. Wybierz katalog gry zawierający `Wow.exe`.
+3. W **Ustawienia → Sposób uruchamiania** wybierz jednorazowo **Przez LichLoader (DLL)**. Jest to opcjonalny tryb, wyłącznie dla środowisk, w których ładowanie modułów jest dozwolone.
+4. Kliknij **Uruchom WoW z DLL**. Aplikacja sama zainstaluje/odświeży addon, przygotuje pliki DLL z własnego pakietu, dopisze adapter do konfiguracji i uruchomi grę przez LichLoader.
+5. Po zalogowaniu do postaci zobacz w aplikacji, czy status **DLL: Przesyła dane** zmienił się na zielony. Tylko odebranie prawdziwych pakietów potwierdza działanie połączenia. W WoW można wpisać `/wowmcpnative` dla diagnostyki.
 
-1. Pobierz `LichLoader.exe` i `LichCore.dll` z [oficjalnej strony wydań LichLoader](https://github.com/brues-code/LichLoader/releases). Umieść oba pliki obok `Wow.exe`.
-2. Pobierz wynik workflow **Experimental Lua DLL (offline only)** z Actions tego repozytorium. W pliku ZIP jest zbudowany adapter `WrathClassicAPI-offline-with-WoWMCP.dll`. Skopiuj go do folderu `dll` obok gry pod nazwą `WoWMCPNativeLua.dll`. Nie używaj zwykłej DLL WrathClassicAPI bez modułu WoWMCP.
-3. W katalogu gry utwórz lub uzupełnij `lichloader.txt` o pojedynczą linię `dll\WoWMCPNativeLua.dll`. Zachowaj pozostałe wpisy i pliki.
-4. W WoW Connect otwórz **Ustawienia → Sposób uruchamiania → Przez LichLoader (DLL)**. Aplikacja sprawdzi, czy klient i pliki wykonawcze są w formacie Win32 x86 oraz czy konfiguracja istnieje.
-5. Zamknij działające WoW i kliknij **Uruchom WoW z DLL**. Wejdź na postać i wpisz `/wowmcpnative` w czacie gry. Gdy połączenie działa, status powinien pokazać poprawnie wysłany pakiet, a ekran WoW Connect wyświetli „DLL · Przesyła dane”.
+### Skąd pochodzą pliki?
 
-**Ważne:** sama obecność plików lub start LichLoadera nie stanowią dowodu działania DLL. Status zmienia się dopiero po odebraniu świeżych danych postaci. Ten tryb wymaga rzeczywistego testu na wybranym kliencie. W razie niepowodzenia wybierz **Standardowy** — odczyt przez addon nadal działa.
+- `LichLoader.exe` i `LichCore.dll`: oficjalne wydanie `v1.1.0` projektu [LichLoader](https://github.com/brues-code/LichLoader/releases/tag/v1.1.0), pobierane i weryfikowane według SHA-256 podczas budowania instalatora.
+- `WoWMCPNativeLua.dll`: adapter zbudowany w CI z przypiętej rewizji [WrathClassicAPI](https://github.com/brues-code/WrathClassicAPI) oraz pliku `native_bridge/adapter/WoWMCPNativeLua.cpp`.
+- Pełne źródła adaptera udostępnia artefakt **WoWMCP-Native-Corresponding-Source** w tym samym workflow GitHub Actions. Kod źródłowy LichLoadera jest dostępny w jego repozytorium.
 
-Tryb DLL może być niezgodny z zasadami konkretnego serwera i jego zabezpieczeniami. Nie jest dostarczany mechanizm ich obchodzenia.
+**Zabezpieczenia:** nie modyfikujemy `Wow.exe`; nie nadpisujemy innych wersji `LichLoader.exe` ani `LichCore.dll`. Aktualizowana poprzednia DLL otrzymuje kopię w `WoWMCPBackups`, a inne wpisy w `lichloader.txt` pozostają. Jeśli gra już działa, uruchomienie w trybie DLL wymaga jej zamknięcia.
+
+**Ograniczenia:** dostępność plików oraz poprawne uruchomienie programu nie dowodzą, że dany klient WoW przyjął moduł. Adapter nie był jeszcze zweryfikowany na działającym kliencie Warmane. Nie jest zapewnione obchodzenie zabezpieczeń gry, a zasady serwera mogą zabraniać takich bibliotek. Możesz zawsze przełączyć się na tryb **Standardowy** z odczytem wizualnym.
 
 ## Kompilacja Windows
 
@@ -42,7 +46,8 @@ Bezpośrednio z checkoutu:
 
 ```powershell
 python -m pip install -r requirements.txt pyinstaller
-pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --name wow-mcp-service desktop_service.py
+# Najpierw zbuduj pakiet native_runtime: LichLoader.exe, LichCore.dll i WoWMCPNativeLua.dll.
+pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
 New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries
 Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
 python desktop-next/scripts/generate_icons.py
