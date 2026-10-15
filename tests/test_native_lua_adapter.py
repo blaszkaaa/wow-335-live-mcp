@@ -44,12 +44,13 @@ class NativeLuaFrameTests(unittest.TestCase):
             self.assertEqual(server.read_best_wow_live_data(), native)
             visual.assert_not_called()
 
-    def test_visual_fallback_when_native_unavailable(self):
-        visual_value = {"available": True, "source": "WoW addon visual data strip"}
-        with mock.patch.dict("os.environ", {"WOW_MCP_NATIVE_BRIDGE": "1"}), \
-             mock.patch.object(server, "read_wow_native_data", return_value={"available": False}), \
-             mock.patch.object(server, "live_game_data", return_value=visual_value):
-            self.assertEqual(server.read_best_wow_live_data(), visual_value)
+    def test_native_missing_returns_error_without_visual_fallback(self):
+        with mock.patch.object(server, "read_wow_native_data", return_value={"available": False}), \
+             mock.patch.object(server, "live_game_data") as visual:
+            result = server.read_best_wow_live_data()
+            self.assertFalse(result["available"])
+            self.assertEqual(result["source"], "native_dll")
+            visual.assert_not_called()
 
     def test_standalone_demo_not_considered_game_telemetry(self):
         with mock.patch.dict("os.environ", {"WOW_MCP_NATIVE_BRIDGE": "1"}), \
@@ -58,7 +59,7 @@ class NativeLuaFrameTests(unittest.TestCase):
                                              "data": {"character": {"name": "Demo"}}}), \
              mock.patch.object(server, "live_game_data", return_value={"available": False}) as visual:
             self.assertFalse(server.read_best_wow_live_data()["available"])
-            visual.assert_called_once()
+            visual.assert_not_called()
 
     def test_desktop_native_discovery_does_not_require_environment_flag(self):
         with mock.patch.dict("os.environ", {"WOW_MCP_NATIVE_BRIDGE": ""}), \
