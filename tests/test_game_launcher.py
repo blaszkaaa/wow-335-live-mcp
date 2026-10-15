@@ -63,26 +63,23 @@ class GameLauncherTests(TestCase):
     def test_service_launch_starts_in_background(self):
         with TemporaryDirectory() as temp:
             game, src = self.make_fixture(temp)
-            state = DesktopState(NativePipeReceiver(), Path(temp) / "settings.json")
+            state = DesktopState(__import__("desktop_service").DisabledNativeReceiver(),
+                                 Path(temp) / "settings.json")
             state.set_settings({"game_dir": str(game)})
             events = []
             def addon(path):
                 events.append("addon")
                 return install_addon(path, src)
-            def native(path):
-                events.append("native")
-            def launch(path, mode=None):
-                events.append("launch:" + str(mode))
+            def launch(path):
+                events.append("launch")
             with patch("desktop_service.install_addon", side_effect=addon), \
-                 patch("desktop_service.setup_native_runtime", side_effect=native), \
                  patch("desktop_service.find_game_running", return_value=False), \
                  patch("desktop_service.launch_wow", side_effect=launch):
-                response = state.request_launch()
-                self.assertTrue(response["started"])
+                self.assertTrue(state.request_launch()["started"])
                 limit = time.monotonic() + 4
                 while state.dashboard()["launch"]["busy"] and time.monotonic() < limit:
                     time.sleep(0.015)
-            self.assertEqual(events, ["addon", "native", "launch:native"])
+            self.assertEqual(events, ["addon", "launch"])
             self.assertEqual(state.dashboard()["launch"]["status"], "started")
             self.assertTrue(state.dashboard()["game"]["addon_installed"])
 
@@ -101,22 +98,15 @@ class GameLauncherTests(TestCase):
                 launch.assert_not_called()
             self.assertEqual(state.dashboard()["launch"]["status"], "already_running")
 
-    def test_service_uses_selected_preinstalled_native_launcher(self):
+    def test_service_never_accepts_native_mode(self):
         with TemporaryDirectory() as temp:
             game, src = self.make_fixture(temp)
-            state = DesktopState(NativePipeReceiver(), Path(temp) / "settings.json")
-            state.set_settings({"game_dir": str(game), "launch_mode": "native"})
-            with patch("desktop_service.install_addon", side_effect=lambda p: install_addon(p, src)), \
-                 patch("desktop_service.find_game_running", return_value=False), \
-                 patch("desktop_service.setup_native_runtime") as setup, \
-                 patch("desktop_service.launch_wow") as launch:
-                self.assertTrue(state.request_launch()["started"])
-                deadline = time.monotonic() + 3
-                while state.dashboard()["launch"]["busy"] and time.monotonic() < deadline:
-                    time.sleep(0.015)
-            setup.assert_called_once_with(str(game))
-            launch.assert_called_once_with(str(game), mode="native")
-            self.assertEqual(state.dashboard()["launch"]["status"], "started")
+            state = DesktopState(__import__("desktop_service").DisabledNativeReceiver(),
+                                 Path(temp) / "settings.json")
+            state.set_settings({"game_dir": str(game)})
+            with self.assertRaises(ValueError):
+                state.set_settings({"launch_mode": "native"})
+            self.assertEqual(state.get_settings()["launch_mode"], "addon")
 
     def test_launch_missing_game_returns_message(self):
         with TemporaryDirectory() as temp:
