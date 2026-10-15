@@ -1,83 +1,42 @@
-# WoW MCP Control Center — Tauri Desktop
+# WoW Connect — lekka aplikacja Windows
 
-Nowy interfejs Windows bazuje na **Tauri 2, React i TypeScript**, zamiast
-Tkinter. Obsługuje systemowy WebView2 oraz usługę Python działającą lokalnie.
+Aplikacja desktopowa Tauri 2 + React dla WoW 3.3.5a. Jeden jasny ekran zamiast kilku zakładek: uruchamianie gry, odczyt postaci, podstawowy stan zadań oraz uczciwy wskaźnik połączenia.
 
-## Poprawki stabilności i skalowania (v0.3.1)
+## Pierwsze uruchomienie
 
-- Kompilacja release Tauri korzysta z podsystemu okienkowego Windows,
-  więc nie otwiera dodatkowej konsoli CMD obok aplikacji.
-- Pomocnicze sprawdzanie procesu `Wow.exe` uruchamia `tasklist` bez
-  widocznego okna i wykonuje to asynchronicznie, z cache co 8 sekund.
-- W **Ustawienia → Skalowanie interfejsu** można wybrać **80–140%**.
-  Preferencja zapamiętuje się na tym komputerze.
-- Skróty: **Ctrl++**, **Ctrl+-**, **Ctrl+0** (przywrócenie 100%).
-- Responsywny układ działa również w mniejszym oknie; minimalny rozmiar
-  okna zmniejszono, aby działało lepiej przy 125–150% DPI Windows.
-- Interfejs korzysta z czcionek systemowych w trybie offline.
+1. Zainstaluj aktualny instalator z artefaktu **WoW-MCP-Control-Center-Tauri-Windows** w GitHub Actions (**Tauri Windows Desktop**).
+2. W aplikacji kliknij **Uruchom WoW** i wskaż katalog zawierający `Wow.exe`. Przykład: `C:\Users\mati\Downloads\World of Warcraft 3.3.5a`.
+3. Aplikacja automatycznie aktualizuje addon WoWMCPData (z kopią poprzedniej wersji) i uruchamia **oryginalną** grę. Jeśli jest już włączona, wykonaj `/reload`.
+4. Sprawdź na ekranie wyboru postaci, że addon **WoW MCP Data** jest aktywny. Wejdź do świata i kliknij **Odczytaj postać**.
+5. Opcja zmiany folderu znajduje się pod ikoną ustawień.
 
-Zmiany w kodzie wymagają ponownej instalacji **nowego EXE z GitHub Actions**;
-stary instalator nie otrzyma poprawek samodzielnie.
+Odczyt wizualny wymaga niezminimalizowanego okna gry oraz widocznego paska addonu. Nie zachodzi automatyczne odczytywanie obrazu co kilka sekund: przycisk pozwala świadomie wywołać odczyt. Gdy prawdziwe dane są dostępne, widać imię postaci, poziom, paski HP/XP i liczbę gotowych zadań.
 
-## Uruchom WoW jednym kliknięciem
+## ChatGPT / lokalny MCP
 
-1. Otwórz WoW MCP Control Center i wybierz **Ustawienia**.
-2. Wskaż folder zawierający `Wow.exe`, np.
-   `C:\Users\mati\Downloads\World of Warcraft 3.3.5a`.
-3. Kliknij **Uruchom WoW z addonem** lub na pulpicie **Uruchom WoW**.
-4. Aplikacja instaluje/zaktualizuje `WoWMCPData.toc` i
-   `WoWMCPData.lua` w `Interface\AddOns\WoWMCPData`, zachowując
-   kopię poprzedniej wersji w `Interface\AddOns-backups`, jeśli się różni.
-5. Uruchamia oryginalny `Wow.exe`. Jeśli gra już działa, nie otwiera drugiej
-   instancji. Po zmianie addonu wpisz `/reload`.
-6. Na ekranie postaci włącz **WoW MCP Data** w AddOns, jeśli dotąd nie
-   był włączony. Po wejściu do gry kliknij **Odczytaj grę** w panelu.
+Usługa desktopowa automatycznie uruchamia lokalny hub z losowym tokenem. Oddzielny proces MCP może teraz sam wykryć działający hub i wybraną w aplikacji ścieżkę do gry. Gdy gra dostarcza prawdziwe, świeże dane natywne, `read_wow_live_data` preferuje je bez osobnych zmiennych `WOW_MCP_NATIVE_BRIDGE`; gdy ich nie ma, korzysta z odczytu paska WoWMCPData.
 
-Odbiornik Named Pipe i lokalny hub MCP uruchamiają się wraz z aplikacją.
-**Ważne:** ten automat NIE instaluje i NIE wstrzykuje eksperymentalnej DLL do
-klienta Warmane. Jest to nadal testowany oddzielnie moduł C++.
-Jego obecność w repozytorium nie oznacza, że jest bezpieczny lub
-zgodny z antycheatem danego serwera.
+Nadal trzeba osobno skonfigurować lokalny serwer MCP lub prywatne połączenie z ChatGPT; samo uruchomienie programu nie rejestruje go w zdalnej sesji.
 
-## Możliwości
+## DLL: ważne ograniczenie
 
-- Przegląd z kartą postaci, statystykami, zadaniami i paskami HP / XP.
-- Postać, wyszukiwarka questów, ekwipunek i diagnostyka transportu.
-- Natywny wybór folderu Wow.exe.
-- Ręczny odczyt danych addonu WoWMCPData.
-- Tryb demonstracyjny, wyraźnie oznaczony jako DEMO.
-- Usługa lokalna uruchamiana jako PyInstaller sidecar.
-- Współdzielony hub MCP chroniony losowym tokenem.
+**Zielona etykieta DLL** jest pokazywana wyłącznie wtedy, gdy do aplikacji docierają rzeczywiste dane postaci przez eksperymentalny Named Pipe. Uruchomiony odbiornik bez pakietów to **Brak danych z DLL**, a nie „połączono”.
 
-## Instalator Windows
+Repo zawiera działający protokół Named Pipe, testowy natywny nadajnik Win32 oraz eksperymentalny adapter Lua→DLL oparty o WrathClassicAPI. Test transportu lub kompilacja adaptera **nie potwierdzają**, że biblioteka działa w Twojej grze. Aplikacja **nie ładuje ani nie wstrzykuje DLL** do klienta Warmane. Test w rzeczywistym kliencie wymaga autoryzowanego środowiska; tego nie da się zweryfikować w CI. Zwykły addon pozostaje obsługiwanym rozwiązaniem.
 
-Wejdź na GitHub Actions > Tauri Windows Desktop > ostatni udany run.
-Pobierz artefakt WoW-MCP-Control-Center-Tauri-Windows i uruchom instalator
-z archiwum ZIP. Aplikacja korzysta z WebView2, dostępnego w Windows 10/11.
+## Kompilacja Windows
 
-## Build lokalny
+Źródło jest kompilowane i pakowane przez `.github/workflows/tauri.yml` (Windows, Node 22, Python 3.11, Rust). Workflow uruchamia testy Pythona, kompilację TypeScript, budowę sidecar PyInstaller i instalatora NSIS. Kompilacja nie wymaga dodatkowego CMD przy uruchamianiu aplikacji.
 
-Wymagane: Node.js 22, Rust, Python 3.11, Visual Studio C++ Build Tools.
+Bezpośrednio z checkoutu:
 
-Z katalogu głównego projektu przygotuj usługę:
-
-    python -m pip install -r requirements.txt pyinstaller
-    pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData/WoWMCPData.lua;WoWMCPData" --name wow-mcp-service desktop_service.py
-    mkdir desktop-next\src-tauri\binaries
-    copy dist\wow-mcp-service.exe desktop-next\src-tauri\binaries\wow-mcp-service-x86_64-pc-windows-msvc.exe
-    python desktop-next\scripts\generate_icons.py
-    cd desktop-next
-    npm install
-    npm run tauri build -- --bundles nsis
-
-Podczas instalacji EXE usługa Python jest dołączana jako sidecar i uruchamiana
-automatycznie. Tauri komunikuje się z nią wyłącznie przez lokalne API.
-
-## Ważne
-
-Dodano opcjonalny adapter C++ rejestrujący WoWMCP.Publish(json) w Lua
-przez WrathClassicAPI. Kod kompiluje się jako Win32, ale nie jest jeszcze
-zweryfikowany w działającym kliencie WoW i nie wolno zakładać zgodności z
-antycheatem Warmane. Nie wstrzykuj DLL do WoW na serwerach bez zgody.
-Domyślnie odczyt nadal działa przez wizualny addon WoWMCPData.
-Dokumentacja: native_bridge/adapter/README.md.
+```powershell
+python -m pip install -r requirements.txt pyinstaller
+pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --name wow-mcp-service desktop_service.py
+New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries
+Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
+python desktop-next/scripts/generate_icons.py
+cd desktop-next
+npm install
+npm run tauri build -- --bundles nsis
+```

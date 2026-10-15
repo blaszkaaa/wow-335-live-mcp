@@ -59,6 +59,10 @@ class NativeHubClient:
     def snapshot(self):
         return self._get("/v1/snapshot")
 
+    def settings(self):
+        """Read the configured WoW path from the authenticated desktop service."""
+        return self._get("/v2/settings")
+
 
 class NativeHubServer:
     def __init__(self, receiver, discovery_file=DISCOVERY_FILE, dashboard=None):
