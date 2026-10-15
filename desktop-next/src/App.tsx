@@ -88,8 +88,8 @@ export default function App() {
   };
 
   const native = dashboard.transport;
-  const dllConnected = Boolean(connected && dashboard.source === "experimental native DLL named pipe" && native?.available);
   const connected = Boolean(dashboard.available && !dashboard.demo);
+  const dllConnected = Boolean(connected && dashboard.source === "experimental native DLL named pipe" && native?.available);
   const data = connected ? dashboard.data : null;
   const character = data?.character;
   const quests = useMemo(() => Array.isArray(data?.quests) ? data.quests.filter(q => q && q.title) : [], [data?.quests]);
