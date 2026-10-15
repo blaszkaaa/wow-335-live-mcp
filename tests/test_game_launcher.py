@@ -98,6 +98,21 @@ class GameLauncherTests(TestCase):
                 launch.assert_not_called()
             self.assertEqual(state.dashboard()["launch"]["status"], "already_running")
 
+    def test_service_uses_selected_preinstalled_native_launcher(self):
+        with TemporaryDirectory() as temp:
+            game, src = self.make_fixture(temp)
+            state = DesktopState(NativePipeReceiver(), Path(temp) / "settings.json")
+            state.set_settings({"game_dir": str(game), "launch_mode": "native"})
+            with patch("desktop_service.install_addon", side_effect=lambda p: install_addon(p, src)), \
+                 patch("desktop_service.find_game_running", return_value=False), \
+                 patch("desktop_service.launch_wow") as launch:
+                self.assertTrue(state.request_launch()["started"])
+                deadline = time.monotonic() + 3
+                while state.dashboard()["launch"]["busy"] and time.monotonic() < deadline:
+                    time.sleep(0.015)
+            launch.assert_called_once_with(str(game), mode="native")
+            self.assertEqual(state.dashboard()["launch"]["status"], "started")
+
     def test_launch_missing_game_returns_message(self):
         with TemporaryDirectory() as temp:
             state = DesktopState(NativePipeReceiver(), Path(temp) / "settings.json")

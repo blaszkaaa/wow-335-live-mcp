@@ -35,8 +35,11 @@ odbiornik MCP i uruchamia grę. Jeśli WoW już działa, nie uruchamia
 drugiej instancji i informuje, czy wymagane jest `/reload`.
 Na głównym ekranie pozostają tylko przyciski uruchomienia i odczytu postaci; zmianę folderu znajdziesz pod ikoną ustawień.
 
-DLL nie jest automatycznie ładowana ani wstrzykiwana do klienta
-Warmane; szczegóły wariantu do testów offline poniżej.
+Opcjonalny tryb **Przez LichLoader (DLL)** może uruchomić grę przez
+wcześniej zainstalowany zewnętrzny LichLoader.exe. Aplikacja nie
+pobiera ani nie instaluje tego programu samodzielnie, sprawdza wymagane
+pliki i nie obchodzi zabezpieczeń klienta.
+Zobacz [instrukcję przygotowania trybu DLL](desktop-next/README.md).
 
 ## Opcjonalna integracja Lua → DLL (offline)
 
@@ -71,7 +74,11 @@ Win32, ale nie został sprawdzony w działającym kliencie ani na Warmane.**
 Odczyt wizualny pozostaje rozwiązaniem domyślnym i zapasowym.
 [Instrukcja testowa native Lua](native_bridge/adapter/README.md).
 
-**Zielony status DLL w WoW Connect oznacza rzeczywiste odebrane pakiety, nie tylko aktywny odbiornik. Aplikacja nie wstrzykuje DLL do Warmane.**\n\n### Poprzednie GUI (tryb legacy)
+**Zielony status DLL w WoW Connect oznacza rzeczywiste odebrane pakiety,
+nie tylko aktywny odbiornik. Tryb DLL wymaga gotowej, osobno
+zainstalowanej konfiguracji LichLoader.**
+
+### Poprzednie GUI (tryb legacy)
 
 Stary interfejs CustomTkinter z pliku desktop_app.py jest pozostawiony
 wyłącznie jako rozwiązanie zapasowe.

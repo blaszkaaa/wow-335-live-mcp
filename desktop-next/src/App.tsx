@@ -12,7 +12,7 @@ const isReady = (quest: Quest) => Boolean(quest.ready_to_turn_in || quest.comple
 export default function App() {
   const [dashboard, setDashboard] = useState<Dashboard>(EMPTY);
   const [serviceError, setServiceError] = useState(false);
-  const [pending, setPending] = useState<"" | "launch" | "read" | "folder">("");
+  const [pending, setPending] = useState<"" | "launch" | "read" | "folder" | "mode">("");
   const [notice, setNotice] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -45,6 +45,22 @@ export default function App() {
       }
     } catch (error) {
       setNotice("Nie udało się wybrać folderu: " + String(error));
+    } finally {
+      setPending("");
+    }
+  };
+
+  const changeLaunchMode = async (mode: "addon" | "native") => {
+    if (pending) return;
+    setPending("mode");
+    try {
+      await backend("set_settings", { launch_mode: mode });
+      setNotice(mode === "native"
+        ? "Wybrano tryb DLL. Przed uruchomieniem sprawdź wymagane pliki poniżej."
+        : "Wybrano standardowe uruchamianie WoW.");
+      await update();
+    } catch (error) {
+      setNotice("Nie udało się zmienić trybu: " + String(error));
     } finally {
       setPending("");
     }
@@ -89,6 +105,8 @@ export default function App() {
 
   const native = dashboard.transport;
   const connected = Boolean(dashboard.available && !dashboard.demo);
+  const nativeMode = dashboard.launch_mode === "native";
+  const nativeReady = dashboard.native_setup?.ready === true;
   const dllConnected = Boolean(connected && dashboard.source === "experimental native DLL named pipe" && native?.available);
   const data = connected ? dashboard.data : null;
   const character = data?.character;
@@ -101,6 +119,7 @@ export default function App() {
     : dashboard.read_in_progress ? "Trwa odczyt" : running ? "Gra uruchomiona" : "Niepołączono";
   const subtitle = serviceError ? "Spróbuj uruchomić aplikację ponownie."
     : !configured ? "Wybierz folder z plikiem Wow.exe, aby rozpocząć."
+    : nativeMode && !nativeReady ? dashboard.native_setup?.reason || "Brakuje konfiguracji DLL."
     : !running ? "Uruchom grę, następnie wejdź na postać."
     : !connected ? "Włącz addon WoWMCPData i użyj /reload, potem kliknij Odczytaj."
     : "Połączenie z Twoją postacią jest gotowe.";
@@ -134,8 +153,8 @@ export default function App() {
           </div>
           <div className="buttons">
             <button className="button primary" onClick={() => void startGame()}
-              disabled={Boolean(pending || dashboard.launch?.busy || serviceError)}>
-              <Play size={17} fill="currentColor"/>{launching ? "Uruchamianie…" : running ? "WoW uruchomiony" : "Uruchom WoW"}
+              disabled={Boolean(pending || dashboard.launch?.busy || serviceError || (nativeMode && !nativeReady))}>
+              <Play size={17} fill="currentColor"/>{launching ? "Uruchamianie…" : running ? "WoW uruchomiony" : nativeMode ? "Uruchom WoW z DLL" : "Uruchom WoW"}
             </button>
             <button className="button secondary" onClick={() => void readGame()}
               disabled={Boolean(pending || dashboard.read_in_progress || serviceError || !configured)}>
@@ -186,7 +205,7 @@ export default function App() {
         <section className="connection-footer" aria-label="Źródła danych">
           <div><span className={`mini-dot ${dllConnected ? "good" : ""}`}/><strong>DLL</strong><span>{dllConnected ? "Przesyła dane" : "Brak danych z DLL"}</span></div>
           <div><span className={`mini-dot ${connected && !dllConnected ? "good" : ""}`}/><strong>Addon</strong><span>{dashboard.game?.addon_installed ? "Zainstalowany" : "Nie zainstalowano"}</span></div>
-          <button className="help" title="DLL nie jest automatycznie wstrzykiwana do WoW. Zielony status pojawia się dopiero po otrzymaniu prawdziwych pakietów." aria-label="Informacja o DLL"><CircleHelp size={16}/></button>
+          <button className="help" title="Status DLL zmienia się po odebraniu prawdziwych danych z gry. Wymagany jest poprawnie zainstalowany zewnętrzny LichLoader." aria-label="Informacja o DLL"><CircleHelp size={16}/></button>
         </section>
 
         {showSettings && <section className="settings" aria-label="Ustawienia gry">
@@ -195,7 +214,18 @@ export default function App() {
           <button className="button secondary" onClick={() => void changeFolder()} disabled={Boolean(pending || serviceError)}>
             <FolderOpen size={17}/>Zmień folder
           </button>
-          <p className="settings-note">DLL nie jest wstrzykiwana do klienta Warmane. Jej połączenie pojawi się dopiero po otrzymaniu prawdziwych danych. Odczyt z addonu pozostaje dostępny.</p>
+          <h3 className="settings-subheading">Sposób uruchamiania</h3>
+          <div className="mode-switch" role="group" aria-label="Wybierz sposób uruchamiania WoW">
+            <button type="button" aria-pressed={!nativeMode} className={!nativeMode ? "selected" : ""}
+              disabled={Boolean(pending)} onClick={() => void changeLaunchMode("addon")}>Standardowy</button>
+            <button type="button" aria-pressed={nativeMode} className={nativeMode ? "selected" : ""}
+              disabled={Boolean(pending)} onClick={() => void changeLaunchMode("native")}>Przez LichLoader (DLL)</button>
+          </div>
+          {nativeMode && <p className={nativeReady ? "native-ready" : "native-warning"}>
+            {nativeReady ? "Wymagane pliki DLL są obecne. Po uruchomieniu sprawdź stan połączenia."
+              : dashboard.native_setup?.reason || "Wybierz folder gry, aby sprawdzić pliki DLL."}
+          </p>}
+          <p className="settings-note">Tryb DLL uruchamia wyłącznie istniejący LichLoader.exe; aplikacja nie instaluje go ani nie wstrzykuje samodzielnie bibliotek. Rzeczywiste połączenie potwierdza dopiero odbiór danych postaci. Bez DLL działa zwykły addon.</p>
         </section>}
       </main>
       <footer>WoW MCP <span>·</span> Tylko lokalny odczyt danych</footer>

@@ -40,6 +40,24 @@ class DesktopServiceTests(unittest.TestCase):
             state.set_settings({"game_dir": str(folder)})
             self.assertEqual(state.get_settings()["game_dir"], str(folder))
 
+    def test_launch_mode_persists_and_keeps_game_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "WoW"
+            folder.mkdir()
+            (folder / "Wow.exe").touch()
+            settings_file = Path(tmp) / "settings.json"
+            state = DesktopState(NativePipeReceiver(), settings_file)
+            state.set_settings({"game_dir": str(folder)})
+            state.set_settings({"launch_mode": "native"})
+            self.assertEqual(state.get_settings()["game_dir"], str(folder))
+            self.assertEqual(state.dashboard()["launch_mode"], "native")
+            reopened = DesktopState(NativePipeReceiver(), settings_file)
+            self.assertEqual(reopened.get_settings()["launch_mode"], "native")
+            with self.assertRaises(ValueError):
+                reopened.set_settings({"launch_mode": "unknown"})
+            reopened.set_settings({"launch_mode": "addon"})
+            self.assertEqual(reopened.get_settings()["game_dir"], str(folder))
+
     def test_game_process_check_is_async_and_cached(self):
         from threading import Event
         gate = Event()

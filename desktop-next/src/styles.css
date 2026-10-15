@@ -102,3 +102,13 @@ footer span{padding:0 5px}
  .connection-footer{gap:18px}
 }
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Minimal manual-native mode controls */
+.settings-subheading{margin-top:24px!important;margin-bottom:12px!important}
+.mode-switch{display:flex;flex-wrap:wrap;gap:8px}
+.mode-switch button{padding:10px 14px;background:#f6f8fb;border:1px solid #e4e8ef;border-radius:9px;color:#627087;font-size:12px;font-weight:640}
+.mode-switch button.selected{background:#eef4ff;border-color:#adc6ff;color:#245ecb}
+.mode-switch button:disabled{opacity:.6;cursor:not-allowed}
+.native-ready,.native-warning{font-size:12px;line-height:1.65;padding:10px 12px;border-radius:9px;margin:13px 0 0}
+.native-ready{color:#167a53;background:#edf9f1}
+.native-warning{color:#8b5c25;background:#fff8e8}

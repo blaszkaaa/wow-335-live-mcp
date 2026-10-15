@@ -9,6 +9,8 @@ export interface Dashboard {
   read_in_progress?: boolean; error?: string | null; last_visual_read?: number;
   game?: {installed:boolean;running:boolean;directory:string;addon_installed?:boolean};
   launch?: {status:"idle"|"installing"|"starting"|"started"|"already_running"|"error";busy:boolean;message:string;backup?:string|null};
+  launch_mode?: "addon" | "native";
+  native_setup?: {ready:boolean;reason:string};
   transport?: {available?:boolean;enabled?:boolean;accepted_frames?:number;rejected_frames?:number;sequence?:number;age_seconds?:number|null;pipe?:string;error?:string|null;session?:string|null}
 }
 export type Page = "overview"|"character"|"quests"|"inventory"|"diagnostics"|"settings";

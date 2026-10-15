@@ -13,6 +13,7 @@ import time
 from game_launcher import addon_installed, install_addon, launch_wow
 from native_bridge.hub import NativeHubServer, DISCOVERY_FILE
 from native_bridge.pipe import NativePipeReceiver
+from native_bridge.diagnostics import inspect_native_runtime
 from ui_models import metrics, select_snapshot, source_label
 
 SETTINGS_FILE = DISCOVERY_FILE.parent / "settings.json"
@@ -52,36 +53,50 @@ class DesktopState:
         self._launch_message = "Wybierz folder gry, aby rozpocząć."
         self._addon_backup = None
         self._game_dir = os.environ.get("WOW_GAME_DIR") or ""
+        self._launch_mode = "addon"
         try:
             settings = json.loads(self.settings_file.read_text(encoding="utf-8"))
             if not self._game_dir:
                 self._game_dir = settings.get("game_dir") or ""
+            if settings.get("launch_mode") in ("addon", "native"):
+                self._launch_mode = settings["launch_mode"]
         except (ValueError, OSError):
             pass
 
     def get_settings(self):
         with self._lock:
-            return {"game_dir": self._game_dir, "auto_read": False}
+            return {"game_dir": self._game_dir, "auto_read": False,
+                    "launch_mode": self._launch_mode}
 
     def set_settings(self, body):
-        if not isinstance(body, dict) or set(body) != {"game_dir"}:
-            raise ValueError("Expected game_dir")
-        location = body["game_dir"]
+        """Update only named settings; changing modes never erases the game path."""
+        if not isinstance(body, dict) or not body or not set(body) <= {"game_dir", "launch_mode"}:
+            raise ValueError("Expected game_dir or launch_mode")
+        location = body.get("game_dir", self._game_dir)
+        mode = body.get("launch_mode", self._launch_mode)
         if not isinstance(location, str) or len(location) > 1024:
             raise ValueError("Invalid game_dir")
         if location and not (Path(location) / "Wow.exe").is_file():
             raise ValueError("Folder must contain Wow.exe")
+        if mode not in ("addon", "native"):
+            raise ValueError("Invalid launch_mode")
         with self._lock:
+            if self._launch_busy:
+                raise ValueError("Wait until game launch completes")
+            changed = location != self._game_dir
             self._game_dir = location
-            self._game_checked_at = 0.0
-            self._game_checked_dir = None
-            self._game_running = False
+            self._launch_mode = mode
+            if changed:
+                self._game_checked_at = 0.0
+                self._game_checked_dir = None
+                self._game_running = False
             self._launch_state = "idle"
             self._launch_message = "Gotowe do uruchomienia gry."
             self._addon_backup = None
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
             temp = self.settings_file.with_suffix(".tmp")
-            temp.write_text(json.dumps({"game_dir": location}, ensure_ascii=False), encoding="utf-8")
+            temp.write_text(json.dumps({"game_dir": location, "launch_mode": mode},
+                                       ensure_ascii=False), encoding="utf-8")
             os.replace(temp, self.settings_file)
         return self.get_settings()
 
@@ -91,27 +106,32 @@ class DesktopState:
             if self._launch_busy:
                 return {"started": False, "reason": "already_starting"}
             game_dir = self._game_dir
+            mode = self._launch_mode
             if not game_dir or not (Path(game_dir) / "Wow.exe").is_file():
                 return {"started": False, "reason": "game_dir_missing"}
             self._launch_busy = True
             self._launch_state = "installing"
             self._launch_message = "Przygotowywanie addonu WoWMCPData..."
             self._addon_backup = None
-        threading.Thread(target=self._launch_worker, args=(game_dir,),
+        threading.Thread(target=self._launch_worker, args=(game_dir, mode),
                          daemon=True, name="wow-one-click-launch").start()
         return {"started": True}
 
-    def _launch_worker(self, game_dir):
+    def _launch_worker(self, game_dir, mode="addon"):
         try:
             result = install_addon(game_dir)
             with self._lock:
                 self._addon_backup = result.backup
                 self._launch_state = "starting"
-                self._launch_message = "Uruchamianie Wow.exe..."
+                self._launch_message = ("Uruchamianie przez LichLoader..." if mode == "native"
+                                        else "Uruchamianie Wow.exe...")
             if find_game_running(game_dir):
                 with self._lock:
                     self._launch_state = "already_running"
                     self._launch_message = (
+                        "Zamknij działającą grę i uruchom WoW ponownie w trybie DLL. "
+                        "LichLoader musi wystartować przed grą."
+                        if mode == "native" else
                         "WoW już działa. " +
                         ("Wpisz /reload, aby wczytać zaktualizowany addon."
                          if result.changed else "Addon jest gotowy.")
@@ -120,7 +140,10 @@ class DesktopState:
                     self._game_checked_at = time.monotonic()
                     self._game_running = True
             else:
-                launch_wow(game_dir)
+                if mode == "native":
+                    launch_wow(game_dir, mode="native")
+                else:
+                    launch_wow(game_dir)
                 with self._lock:
                     self._launch_state = "started"
                     self._launch_message = (
@@ -254,6 +277,7 @@ class DesktopState:
         if active.get("source") == "demo":
             source = "DEMO · dane demonstracyjne"
         transport = self.receiver.status()
+        native_files = inspect_native_runtime(game_dir)
         game_installed = bool(game_dir and (Path(game_dir) / "Wow.exe").is_file())
         return {
             "available": bool(active.get("available")),
@@ -273,7 +297,9 @@ class DesktopState:
                      "directory": game_dir,
                      "addon_installed": bool(game_installed and addon_installed(game_dir))},
             "launch": launch,
+            "launch_mode": self._launch_mode,
             "transport": transport,
+            "native_setup": native_files,
         }
 
 
