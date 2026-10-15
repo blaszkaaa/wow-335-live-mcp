@@ -437,53 +437,59 @@ _NATIVE_RECEIVER = None
 
 
 def wow_native_status():
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
-        return {"available": False, "enabled": False,
-                "reason": "Set WOW_MCP_NATIVE_BRIDGE=1 to enable native telemetry."}
-    # Prefer the GUI-hosted hub so the telemetry pipe has only one owner.
+    # The desktop app already owns the pipe and advertises a local authenticated
+    # hub. It must be usable by MCP without environment variables; otherwise
+    # the interface appears connected while ChatGPT silently ignores its data.
     hub = NativeHubClient.discover()
     if hub is not None:
         remote = hub.status()
         if remote is not None:
             return {**remote, "transport": "desktop_gui_hub"}
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
+        return {"available": False, "enabled": False,
+                "reason": "Start WoW Connect or opt in with WOW_MCP_NATIVE_BRIDGE=1."}
     if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
         return {"available": False, "enabled": True,
-                "reason": "GUI not running or not reachable; start desktop_app.py."}
+                "reason": "Desktop hub unavailable; start WoW Connect."}
     if _NATIVE_RECEIVER is None:
         return {"available": False, "enabled": False,
-                "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
+                "reason": "Native receiver not started."}
     return _NATIVE_RECEIVER.status()
 
 
 def read_wow_native_data():
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
-        return {"available": False, "enabled": False, "data": None,
-                "reason": "Set WOW_MCP_NATIVE_BRIDGE=1 to enable native telemetry."}
+    # Prefer the desktop hub even if the MCP environment was not configured
+    # with the experimental native bridge flag.
     hub = NativeHubClient.discover()
     if hub is not None:
         remote = hub.snapshot()
         if remote is not None:
             return {**remote, "transport": "desktop_gui_hub"}
+    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
+        return {"available": False, "enabled": False, "data": None,
+                "reason": "Start WoW Connect or opt in with WOW_MCP_NATIVE_BRIDGE=1."}
     if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
         return {"available": False, "enabled": True, "data": None,
-                "reason": "GUI not running or not reachable; start desktop_app.py."}
+                "reason": "Desktop hub unavailable; start WoW Connect."}
     if _NATIVE_RECEIVER is None:
-        return {"available": False, "enabled": False,
-                "reason": "Experimental DLL bridge is disabled. Set WOW_MCP_NATIVE_BRIDGE=1."}
+        return {"available": False, "enabled": False, "data": None,
+                "reason": "Native receiver not started."}
     return _NATIVE_RECEIVER.snapshot()
 
 
 def read_best_wow_live_data():
-    """Use fresh native addon telemetry first; fall back to the visual strip.
+    """Use fresh real native telemetry from the desktop hub, else visual data.
 
-    A manually launched stand-alone native demo sender must never be treated
-    as real character data by the default gameplay-advice tool.
+    Synthetic frames from the DLL smoke-test sender must never be treated as
+    an in-game character. Native data without an actual character is rejected.
     """
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1":
-        native = read_wow_native_data()
-        if (native.get("available") and native.get("session") != "native-demo"
-                and isinstance(native.get("data"), dict)):
-            return native
+    native = read_wow_native_data()
+    data = native.get("data")
+    character = data.get("character") if isinstance(data, dict) else None
+    if (native.get("available") and native.get("session") != "native-demo"
+            and isinstance(character, dict) and character.get("name")
+            and character.get("name") != "Demo"):
+        return native
     return live_game_data()
 
 
@@ -509,7 +515,7 @@ TOOLS = [
     {"name": "read_wow_combat_log", "description": "Read the latest raw WoW combat-log lines if /combatlog is enabled in game. Report file age; a missing or old file is not live combat data.",
      "inputSchema": {"type": "object", "properties": {"max_lines": {"type": "integer", "minimum": 1, "maximum": 100}}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
-    {"name": "read_wow_live_data", "description": "Read current structured WoW 3.3.5a data. With WOW_MCP_NATIVE_BRIDGE=1, prefer fresh validated native Lua telemetry if present, otherwise use the WoWMCPData color strip: character stats, quests with turn-in status, bags, spells, action bar, open trainer/merchant/gossip/quest dialog, and recent player combat summary. Interaction data exists only when an NPC window is open or for 30 seconds after closing. Combat summary is the last fight, not a complete combat log. Report age and missing fields honestly. Read-only and on demand.",
+    {"name": "read_wow_live_data", "description": "Read current structured WoW 3.3.5a data. Prefer fresh validated native Lua telemetry from WoW Connect when available, otherwise use the WoWMCPData color strip: character stats, quests with turn-in status, bags, spells, action bar, open trainer/merchant/gossip/quest dialog, and recent player combat summary. Interaction data exists only when an NPC window is open or for 30 seconds after closing. Combat summary is the last fight, not a complete combat log. Report age and missing fields honestly. Read-only and on demand.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
 ]
