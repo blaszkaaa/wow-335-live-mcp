@@ -88,7 +88,7 @@ export default function App() {
   };
 
   const native = dashboard.transport;
-  const dllConnected = Boolean(native?.available && native?.session !== "native-demo");
+  const dllConnected = Boolean(connected && dashboard.source === "experimental native DLL named pipe" && native?.available);
   const connected = Boolean(dashboard.available && !dashboard.demo);
   const data = connected ? dashboard.data : null;
   const character = data?.character;
