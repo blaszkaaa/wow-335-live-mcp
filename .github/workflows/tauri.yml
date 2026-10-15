@@ -74,6 +74,26 @@ jobs:
           foreach ($file in @("LichLoader.exe", "LichCore.dll", "WoWMCPNativeLua.dll")) {
             if (-not (Test-Path "native_runtime/$file")) { throw "Missing $file" }
           }
+      - name: Archive corresponding source for modified GPL DLL
+        shell: pwsh
+        run: |
+          $source = "build/wowmcp-native-lua/WrathClassicAPI"
+          $out = "build/native-corresponding-source"
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          foreach ($file in @("src", "cmake", "AddOns", "external", "CMakeLists.txt", "LICENSE", ".gitmodules")) {
+            Copy-Item "$source/$file" "$out/" -Recurse -Force
+          }
+          Copy-Item "native_bridge/adapter/build-offline.ps1" "$out/build-offline.ps1"
+          Copy-Item "native_bridge/adapter/README.md" "$out/ADAPTER-README.md"
+          Copy-Item "WoWMCPData/WoWMCPData.lua" "$out/WoWMCPData.lua"
+          Compress-Archive -Path "$out/*" -DestinationPath "WoWMCP-Native-Corresponding-Source.zip" -CompressionLevel Optimal -Force
+      - name: Upload corresponding source
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoWMCP-Native-Corresponding-Source
+          path: WoWMCP-Native-Corresponding-Source.zip
+          if-no-files-found: error
+          retention-days: 30
       - name: Package background service
         run: |
           pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
