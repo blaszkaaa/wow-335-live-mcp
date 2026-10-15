@@ -99,7 +99,7 @@ jobs:
           retention-days: 30
       - name: Package background service
         run: |
-          pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
+          pyinstaller --clean --noconfirm --onefile --windowed --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
           New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries | Out-Null
           Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
       - name: Build standalone native MCP client bridge
