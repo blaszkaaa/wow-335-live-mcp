@@ -1,61 +1,30 @@
-"""Native-only MCP stdio bridge protocol and loopback transport tests."""
+"""Ensure the existing MCP stdio executable reads the RGB addon, not DLL."""
 import json
 import unittest
 from unittest import mock
-
 import native_mcp_stdio as mcp
+import server
 
 
-class NativeMcpStdioTests(unittest.TestCase):
-    def test_initialize_and_tool_catalog(self):
-        hub = mock.Mock()
-        with mock.patch.object(mcp.NativeHubClient, "discover", return_value=hub):
-            hello = mcp.reply({"jsonrpc": "2.0", "id": 1,
-                               "method": "initialize", "params": {}})
-            self.assertEqual(hello["result"]["protocolVersion"], "2025-06-18")
-            self.assertEqual(hello["result"]["serverInfo"]["name"], "wow-335-native-mcp")
+class VisualMcpStdioTests(unittest.TestCase):
+    def test_initialize_and_catalog(self):
+        with mock.patch.object(server.NativeHubClient, "discover", return_value=None):
+            initialized = mcp.reply({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+            self.assertEqual(initialized["result"]["serverInfo"]["name"], "wow-335-live-mcp")
             listed = mcp.reply({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-            names = [tool["name"] for tool in listed["result"]["tools"]]
-            self.assertIn("read_wow_live_data", names)
-            self.assertIn("wow_native_status", names)
-            self.assertNotIn("capture_wow", names)
-            self.assertEqual(hub.announce_mcp.call_count, 2)
+        names = {item["name"] for item in listed["result"]["tools"]}
+        self.assertIn("read_wow_live_data", names)
+        self.assertIn("capture_wow", names)
 
-    def test_notification_and_unknown_method(self):
-        self.assertIsNone(mcp.reply({"jsonrpc": "2.0",
-                                     "method": "notifications/initialized"}))
-        self.assertEqual(mcp.reply({"jsonrpc": "2.0", "id": 7, "method": "ping"})["result"], {})
-        self.assertEqual(mcp.reply({"jsonrpc": "2.0", "id": 8,
-                                    "method": "method/unknown"})["error"]["code"], -32601)
+    def test_stdio_visual_tool_is_correctly_routed(self):
+        visual = {"available": True, "source": "WoW addon visual data strip",
+                  "data": {"character": {"name": "Kovaienko"}}}
+        with mock.patch.object(server.NativeHubClient, "discover", return_value=None), \
+             mock.patch.object(server, "live_game_data", return_value=visual):
+            message = mcp.reply({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                                 "params": {"name": "read_wow_live_data", "arguments": {}}})
+        body = json.loads(message["result"]["content"][0]["text"])
+        self.assertEqual(body["data"]["character"]["name"], "Kovaienko")
 
-    def test_native_live_tool_returns_real_character(self):
-        hub = mock.Mock()
-        hub.snapshot.return_value = {
-            "available": True, "session": "char-01", "age_seconds": 1.1,
-            "source": "experimental native DLL named pipe",
-            "data": {"character": {"name": "Kovaienko", "level": 25},
-                     "quests": [{"title": "Quest A"}]},
-        }
-        with mock.patch.object(mcp.NativeHubClient, "discover", return_value=hub):
-            answer = mcp.reply({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-                                "params": {"name": "read_wow_live_data", "arguments": {}}})
-        content = json.loads(answer["result"]["content"][0]["text"])
-        self.assertTrue(content["available"])
-        self.assertEqual(content["data"]["character"]["name"], "Kovaienko")
-        self.assertEqual(content["transport"], "desktop_gui_hub")
-
-    def test_disconnected_client_returns_clean_error_not_demo(self):
-        with mock.patch.object(mcp.NativeHubClient, "discover", return_value=None):
-            answer = mcp.reply({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-                                "params": {"name": "read_wow_live_data"}})
-        content = json.loads(answer["result"]["content"][0]["text"])
-        self.assertFalse(content["available"])
-        self.assertIsNone(content["data"])
-
-    def test_demo_packet_rejected(self):
-        hub = mock.Mock()
-        hub.snapshot.return_value = {"available": True, "session": "native-demo",
-                                     "data": {"character": {"name": "Demo"}}}
-        with mock.patch.object(mcp.NativeHubClient, "discover", return_value=hub):
-            answer = mcp.native_snapshot()
-            self.assertFalse(answer["available"])
+    def test_notifications_do_not_reply(self):
+        self.assertIsNone(mcp.reply({"jsonrpc": "2.0", "method": "notifications/initialized"}))

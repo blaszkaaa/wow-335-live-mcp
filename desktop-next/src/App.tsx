@@ -60,7 +60,7 @@ export default function App() {
         await backend("set_settings", { game_dir: selected });
       }
       const result = await backend("launch");
-      setNotice(result.started ? "Przygotowuję DLL, addon i uruchamiam grę…" :
+      setNotice(result.started ? "Instaluję addon i uruchamiam zwykły Wow.exe…" :
         result.reason === "already_starting" ? "Gra jest już uruchamiana." :
         "Wybierz prawidłowy folder z Wow.exe.");
       await update();
@@ -71,23 +71,24 @@ export default function App() {
     }
   };
 
-  const checkDll = async () => {
+  const readGame = async () => {
     if (pending) return;
     setPending("read");
     try {
       const result = await backend("refresh");
-      setNotice(result.available ? "Odczyt DLL działa. Dane postaci są aktualne." :
-        "Brak świeżych danych DLL. W grze wpisz /wowmcpnative.");
+      setNotice(result.started ? "Odczytuję kolorowy pasek WoWMCPData z okna gry…" :
+        result.reason === "already_running" ? "Odczyt już trwa." :
+        "Najpierw wskaż folder gry.");
       await update();
     } catch (error) {
-      setNotice("Błąd połączenia DLL: " + String(error));
+      setNotice("Błąd odczytu addonu: " + String(error));
     } finally {
       setPending("");
     }
   };
 
   const connected = Boolean(dashboard.available && !dashboard.demo &&
-    dashboard.source === "experimental native DLL named pipe");
+    dashboard.source === "WoW addon visual data strip");
   const mcpSeen = dashboard.mcp_client?.recent === true;
   const data = connected ? dashboard.data : null;
   const character = data?.character;
@@ -96,24 +97,25 @@ export default function App() {
   const running = Boolean(dashboard.game?.running);
   const configured = Boolean(dashboard.game?.installed);
   const launching = Boolean(dashboard.launch?.busy || pending === "launch");
-  const nativeReady = dashboard.native_setup?.ready === true || dashboard.native_setup?.bundled === true;
-  const age = dashboard.transport?.age_seconds;
+  const readyToLaunch = configured;
+  const reading = Boolean(dashboard.read_in_progress);
   const status = serviceError ? "Usługa nie odpowiada" :
-    connected ? "Dane z DLL dostępne" :
-    running ? "Gra uruchomiona · czekam na DLL" : "Brak połączenia z DLL";
+    reading ? "Odczytuję pasek addonu" :
+    connected ? "Dane postaci dostępne" :
+    running ? "Gra uruchomiona" : "Oczekiwanie na grę";
   const subtitle = serviceError ? "Uruchom ponownie WoW Connect." :
     !configured ? "Wybierz folder z Wow.exe i uruchom grę." :
-    !nativeReady ? "Instalator nie zawiera plików DLL. Pobierz najnowszą wersję." :
-    !running ? "Uruchom WoW przez LichLoader i wejdź na postać." :
-    !connected ? "Sprawdź /wowmcpnative w grze. Nie używamy paska RGB." :
-    "Dane postaci przesyłane są automatycznie przez DLL.";
+    !running ? "Uruchom zwykły WoW i wejdź na postać." :
+    reading ? "Okno WoW musi być widoczne, a kwadrat w lewym dolnym rogu niezasłonięty." :
+    !connected ? "Włącz WoWMCPData i użyj /reload, następnie kliknij Odczytaj postać." :
+    "Odczyt z kolorowego kwadratu addonu — bez DLL.";
 
   return (
     <div className="app">
       <header className="top">
         <div className="brand">
           <span className="mark"><Swords size={19} strokeWidth={2.2}/></span>
-          <div><strong>WoW Connect</strong><span>3.3.5a · Native MCP</span></div>
+          <div><strong>WoW Connect</strong><span>3.3.5a · Addon MCP</span></div>
         </div>
         <button className="icon-button" title="Ustawienia" aria-label="Ustawienia"
           aria-expanded={showSettings} onClick={() => setShowSettings(v => !v)}>
@@ -123,9 +125,9 @@ export default function App() {
 
       <main>
         <div className="intro">
-          <span className="eyebrow">LIVE TELEMETRY</span>
-          <h1>WoW i ChatGPT. Bez paska na ekranie.</h1>
-          <p>Informacje o postaci, zadania i stan połączenia. Odczyt wyłącznie przez DLL.</p>
+          <span className="eyebrow">ODCZYT Z ADDONU</span>
+          <h1>WoW i ChatGPT. Bez DLL.</h1>
+          <p>Uruchom WoW normalnie i odczytuj postać z kwadratu w lewym dolnym rogu.</p>
         </div>
 
         <section className="main-card" aria-label="Stan gry">
@@ -135,19 +137,19 @@ export default function App() {
             </span>
             <div className="state-copy"><h2>{status}</h2><p>{subtitle}</p></div>
             <span className={`state-pill ${connected ? "positive" : ""}`}>
-              <span className="status-dot"/>{connected ? "DLL połączona" : "DLL offline"}
+              <span className="status-dot"/>{connected ? "Odczyt gotowy" : "Brak odczytu"}
             </span>
           </div>
           <div className="buttons">
             <button className="button primary" onClick={() => void startGame()}
-              disabled={Boolean(pending || dashboard.launch?.busy || serviceError || (configured && !nativeReady))}>
+              disabled={Boolean(pending || dashboard.launch?.busy || serviceError)}>
               <Play size={17} fill="currentColor"/>
-              {launching ? "Uruchamianie…" : running ? "WoW uruchomiony" : "Uruchom WoW z DLL"}
+              {launching ? "Uruchamianie…" : running ? "WoW uruchomiony" : "Uruchom WoW"}
             </button>
-            <button className="button secondary" onClick={() => void checkDll()}
-              disabled={Boolean(pending || serviceError || !configured)}>
-              <RefreshCw size={17} className={pending === "read" ? "spin" : ""}/>
-              Sprawdź DLL
+            <button className="button secondary" onClick={() => void readGame()}
+              disabled={Boolean(pending || reading || serviceError || !readyToLaunch)}>
+              <RefreshCw size={17} className={reading || pending === "read" ? "spin" : ""}/>
+              {reading ? "Odczytywanie…" : "Odczytaj postać"}
             </button>
           </div>
           {dashboard.launch?.status && dashboard.launch.status !== "idle" && (
@@ -160,7 +162,7 @@ export default function App() {
 
         <div className="two-col">
           <section className="small-card" aria-label="Postać">
-            <div className="card-heading"><h3>Twoja postać</h3><span>{connected ? "Na żywo" : "Oczekiwanie na DLL"}</span></div>
+            <div className="card-heading"><h3>Twoja postać</h3><span>{connected ? "Ostatni odczyt" : "Brak odczytu"}</span></div>
             {character ? <>
               <div className="character-row">
                 <div className="character-avatar">{(character.name || "?").slice(0, 1).toUpperCase()}</div>
@@ -171,7 +173,7 @@ export default function App() {
                 <div className="track"><div className="fill health" style={{width:`${percent(character.health, character.health_max)}%`}}/></div></div>
               <div className="resource"><div><span>Doświadczenie</span><strong>{percent(character.xp, character.xp_max)}%</strong></div>
                 <div className="track"><div className="fill xp" style={{width:`${percent(character.xp, character.xp_max)}%`}}/></div></div>
-            </> : <p className="card-empty">Po otrzymaniu pakietu DLL pojawią się dane Twojej postaci.</p>}
+            </> : <p className="card-empty">Odczytaj widoczny kwadrat WoWMCPData w grze.</p>}
           </section>
 
           <section className="small-card" aria-label="Zadania">
@@ -190,19 +192,19 @@ export default function App() {
                 </div>)}
                 {quests.length > 10 && <small>Pozostałe zadania są dostępne przez MCP.</small>}
               </div>}
-            </> : <p className="card-empty">Zadania pojawią się automatycznie po połączeniu DLL.</p>}
+            </> : <p className="card-empty">Zadania pojawią się po odczycie addonu.</p>}
           </section>
         </div>
 
         <section className="connection-footer" aria-label="Diagnostyka połączenia">
-          <div><span className={`mini-dot ${connected ? "good" : ""}`}/><strong>DLL</strong>
-            <span>{connected ? `Pakiety na żywo${typeof age === "number" ? ` · ${Math.round(age)} s` : ""}` : "Brak danych"}</span></div>
+          <div><span className={`mini-dot ${connected ? "good" : ""}`}/><strong>Addon RGB</strong>
+            <span>{connected ? "Odczyt zakończony" : dashboard.game?.addon_installed ? "Zainstalowany" : "Nie zainstalowano"}</span></div>
           <div><span className={`mini-dot ${mcpSeen ? "good" : ""}`}/><strong>MCP</strong>
             <span>{mcpSeen ? "Lokalny klient aktywny" : "Brak żądań klienta"}</span></div>
-          <button className="help" title="MCP oznacza aktywność lokalnego klienta. Nie potwierdza, że ChatGPT jest połączony z serwerem. Zdalna wtyczka wymaga osobnej konfiguracji." aria-label="Informacja o MCP"><CircleHelp size={16}/></button>
+          <button className="help" title="MCP oznacza aktywność lokalnego klienta; nie potwierdza połączenia z chmurą ChatGPT." aria-label="Informacja o MCP"><CircleHelp size={16}/></button>
         </section>
         {!mcpSeen && connected && <p className="connection-hint">
-          DLL przesyła dane do WoW Connect. Aby ChatGPT je widział, musi też działać
+          WoW Connect odczytuje addon. Aby ChatGPT widział dane, musi też działać
           podłączony serwer MCP. Sprawdź konfigurację połączenia wtyczki ChatGPT.
         </p>}
 
@@ -214,8 +216,8 @@ export default function App() {
             <FolderOpen size={17}/>Zmień folder
           </button>
           <h3 className="settings-subheading">Źródło danych</h3>
-          <p className="native-ready">Tylko DLL · automatyczne przesyłanie pakietów z addonu WoWMCPData bez widocznego kwadratu.</p>
-          <p className="settings-note">Addon zbiera informacje z API gry. DLL przekazuje je do lokalnego odbiornika. Osobny klient MCP przekazuje odczyty do ChatGPT. Zielony status DLL nie jest potwierdzeniem połączenia ChatGPT.</p>
+          <p className="native-ready">Tylko addon WoWMCPData · widoczny kolorowy kwadrat w lewym dolnym rogu. Bez DLL i LichLoadera.</p>
+          <p className="settings-note">Addon zbiera dane gry i pokazuje je jako kolorowy pasek. WoW Connect odczytuje go z widocznego okna WoW na żądanie. Osobny klient MCP musi być połączony, aby przekazywać odczyty do ChatGPT. W razie starej wersji addonu wpisz /reload.</p>
         </section>}
       </main>
       <footer>WoW Connect <span>·</span> Lokalne dane gry, tylko do odczytu</footer>

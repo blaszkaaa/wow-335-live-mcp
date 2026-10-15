@@ -1,18 +1,6 @@
-name: Experimental Lua DLL (offline only)
+name: Archived DLL experiment (manual only)
 
 on:
-  push:
-    paths:
-      - "native_bridge/adapter/**"
-      - "WoWMCPData/WoWMCPData.lua"
-      - "tests/test_native_lua_adapter.py"
-      - ".github/workflows/native-lua.yml"
-  pull_request:
-    paths:
-      - "native_bridge/adapter/**"
-      - "WoWMCPData/WoWMCPData.lua"
-      - "tests/test_native_lua_adapter.py"
-      - ".github/workflows/native-lua.yml"
   workflow_dispatch:
 
 permissions:

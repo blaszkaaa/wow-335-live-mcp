@@ -96,34 +96,27 @@ class McpTests(unittest.TestCase):
                     server.NativeHubClient, "discover", return_value=hub):
                 self.assertEqual(server.require_game_dir(), game.resolve())
 
-    def test_native_hub_is_available_without_env_flags(self):
-        hub = mock.Mock()
-        hub.status.return_value = {"available": True, "accepted_frames": 1}
-        hub.snapshot.return_value = {
-            "available": True, "session": "real-game-1",
-            "data": {"character": {"name": "Hunter", "level": 18}, "quests": []},
-        }
-        with mock.patch.object(server.NativeHubClient, "discover", return_value=hub):
-            with mock.patch.dict(server.os.environ, {}, clear=True):
-                with mock.patch.object(server, "live_game_data", side_effect=AssertionError(
-                        "Visual fallback must not run for valid native telemetry")):
-                    result = server.read_best_wow_live_data()
-                    self.assertEqual(result["data"]["character"]["name"], "Hunter")
-                    self.assertEqual(result["transport"], "desktop_gui_hub")
-                    self.assertTrue(server.wow_native_status()["available"])
+    def test_live_data_prefers_visual_and_does_not_read_dll(self):
+        visual = {"available": True, "source": "WoW addon visual data strip",
+                  "data": {"character": {"name": "Hunter"}}}
+        with mock.patch.object(server, "live_game_data", return_value=visual) as capture, \
+             mock.patch.object(server, "read_wow_native_data") as native:
+            result = server.read_best_wow_live_data()
+            self.assertEqual(result, visual)
+            self.assertFalse(server.wow_native_status()["available"])
+            capture.assert_called_once_with()
+            native.assert_not_called()
 
-    def test_demo_native_packets_are_rejected_without_visual_fallback(self):
-        hub = mock.Mock()
-        hub.snapshot.return_value = {
-            "available": True, "session": "native-demo",
-            "data": {"character": {"name": "Demo"}},
-        }
-        with mock.patch.object(server.NativeHubClient, "discover", return_value=hub):
-            with mock.patch.object(server, "live_game_data") as capture:
-                result = server.read_best_wow_live_data()
-                self.assertFalse(result["available"])
-                self.assertIsNone(result["data"])
-                capture.assert_not_called()
+    def test_mcp_live_tool_returns_visual_data(self):
+        visual = {"available": True, "source": "WoW addon visual data strip",
+                  "data": {"character": {"name": "Kovaienko"}, "quests": []}}
+        with mock.patch.object(server, "live_game_data", return_value=visual):
+            response = server.reply({"jsonrpc": "2.0", "id": 11,
+                                     "method": "tools/call",
+                                     "params": {"name": "read_wow_live_data"}})
+        self.assertEqual(__import__("json").loads(
+            response["result"]["content"][0]["text"])["data"]["character"]["name"],
+            "Kovaienko")
 
     def test_status_uses_configured_game_directory(self):
         with tempfile.TemporaryDirectory() as temporary:

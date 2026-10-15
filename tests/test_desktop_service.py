@@ -17,7 +17,7 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertFalse(data["available"])
             self.assertFalse(data["game"]["installed"])
             self.assertEqual(data["metrics"]["quest_count"], 0)
-            self.assertFalse(state.request_refresh()["available"])
+            self.assertEqual(state.request_refresh()["reason"], "game_dir_missing")
 
     def test_synthetic_native_packets_are_never_reported_as_connected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -42,24 +42,36 @@ class DesktopServiceTests(unittest.TestCase):
             state.set_settings({"game_dir": str(folder)})
             self.assertEqual(state.get_settings()["game_dir"], str(folder))
 
-    def test_launch_mode_persists_and_keeps_game_path(self):
+    def test_visual_mode_overrides_saved_native_preference(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "WoW"
             folder.mkdir()
             (folder / "Wow.exe").touch()
             settings_file = Path(tmp) / "settings.json"
+            settings_file.write_text(__import__("json").dumps(
+                {"game_dir": str(folder), "launch_mode": "native"}), encoding="utf-8")
             state = DesktopState(NativePipeReceiver(), settings_file)
-            state.set_settings({"game_dir": str(folder)})
-            state.set_settings({"launch_mode": "native"})
+            self.assertEqual(state.get_settings()["launch_mode"], "addon")
+            self.assertEqual(state.dashboard()["launch_mode"], "addon")
             self.assertEqual(state.get_settings()["game_dir"], str(folder))
-            self.assertEqual(state.dashboard()["launch_mode"], "native")
+            with self.assertRaises(ValueError):
+                state.set_settings({"launch_mode": "native"})
+            state.set_settings({"launch_mode": "addon"})
             reopened = DesktopState(NativePipeReceiver(), settings_file)
-            self.assertEqual(reopened.get_settings()["launch_mode"], "native")
-            with self.assertRaises(ValueError):
-                reopened.set_settings({"launch_mode": "unknown"})
-            with self.assertRaises(ValueError):
-                reopened.set_settings({"launch_mode": "addon"})
+            self.assertEqual(reopened.get_settings()["launch_mode"], "addon")
             self.assertEqual(reopened.get_settings()["game_dir"], str(folder))
+
+    def test_refreshed_visual_snapshot_appears_in_dashboard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = DesktopState(NativePipeReceiver(), Path(tmp) / "settings.json")
+            state._visual = {"available": True, "source": "WoW addon visual data strip",
+                             "data": {"captured_at": time.time(),
+                                      "character": {"name": "Kovaienko"},
+                                      "quests": [{"title": "Quest A"}]}}
+            result = state.dashboard()
+            self.assertTrue(result["available"])
+            self.assertEqual(result["source"], "WoW addon visual data strip")
+            self.assertEqual(result["metrics"]["quest_count"], 1)
 
     def test_game_process_check_is_async_and_cached(self):
         from threading import Event
