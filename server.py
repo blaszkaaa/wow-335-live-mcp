@@ -57,9 +57,19 @@ class RECT(ctypes.Structure):
 
 
 def require_game_dir():
-    if GAME is None:
-        raise RuntimeError("Set WOW_GAME_DIR to the folder containing Wow.exe.")
-    return GAME
+    if GAME is not None:
+        return GAME
+    # MCP often runs separately from the desktop UI. Reuse its authenticated
+    # saved configuration rather than require a second game path setting.
+    hub = NativeHubClient.discover()
+    if hub is not None:
+        settings = hub.settings()
+        directory = settings.get("game_dir") if isinstance(settings, dict) else None
+        if isinstance(directory, str) and directory:
+            game = Path(directory).expanduser().resolve()
+            if (game / "Wow.exe").is_file():
+                return game
+    raise RuntimeError("Wybierz folder WoW w aplikacji lub ustaw WOW_GAME_DIR.")
 
 
 def process_path(hwnd):
