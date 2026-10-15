@@ -15,7 +15,7 @@ from native_bridge.hub import NativeHubServer, DISCOVERY_FILE
 from native_bridge.pipe import NativePipeReceiver
 from native_bridge.diagnostics import inspect_native_runtime
 from native_bridge.setup import native_bundle_ready, setup_native_runtime
-from ui_models import metrics, select_snapshot, source_label
+from ui_models import metrics, source_label
 
 SETTINGS_FILE = DISCOVERY_FILE.parent / "settings.json"
 
@@ -38,9 +38,9 @@ class DesktopState:
         self.receiver = receiver
         self.settings_file = Path(settings_file)
         self._lock = threading.RLock()
-        self._visual = None
-        self._demo = None
         self._busy = False
+        self._mcp_last_seen = 0.0
+        self._mcp_calls = 0
         self._error = None
         self._reading_since = None
         self._updated_at = 0
@@ -54,13 +54,12 @@ class DesktopState:
         self._launch_message = "Wybierz folder gry, aby rozpocząć."
         self._addon_backup = None
         self._game_dir = os.environ.get("WOW_GAME_DIR") or ""
-        self._launch_mode = "addon"
+        self._launch_mode = "native"
         try:
             settings = json.loads(self.settings_file.read_text(encoding="utf-8"))
             if not self._game_dir:
                 self._game_dir = settings.get("game_dir") or ""
-            if settings.get("launch_mode") in ("addon", "native"):
-                self._launch_mode = settings["launch_mode"]
+            # v0.6 is native-only. Previously saved visual-mode settings are ignored.
         except (ValueError, OSError):
             pass
 
@@ -74,19 +73,19 @@ class DesktopState:
         if not isinstance(body, dict) or not body or not set(body) <= {"game_dir", "launch_mode"}:
             raise ValueError("Expected game_dir or launch_mode")
         location = body.get("game_dir", self._game_dir)
-        mode = body.get("launch_mode", self._launch_mode)
+        mode = body.get("launch_mode", "native")
         if not isinstance(location, str) or len(location) > 1024:
             raise ValueError("Invalid game_dir")
         if location and not (Path(location) / "Wow.exe").is_file():
             raise ValueError("Folder must contain Wow.exe")
-        if mode not in ("addon", "native"):
-            raise ValueError("Invalid launch_mode")
+        if mode != "native":
+            raise ValueError("Only native DLL mode is supported")
         with self._lock:
             if self._launch_busy:
                 raise ValueError("Wait until game launch completes")
             changed = location != self._game_dir
             self._game_dir = location
-            self._launch_mode = mode
+            self._launch_mode = "native"
             if changed:
                 self._game_checked_at = 0.0
                 self._game_checked_dir = None
@@ -114,7 +113,7 @@ class DesktopState:
             self._launch_state = "installing"
             self._launch_message = "Przygotowywanie addonu WoWMCPData..."
             self._addon_backup = None
-        threading.Thread(target=self._launch_worker, args=(game_dir, mode),
+        threading.Thread(target=self._launch_worker, args=(game_dir, "native"),
                          daemon=True, name="wow-one-click-launch").start()
         return {"started": True}
 
@@ -169,67 +168,32 @@ class DesktopState:
                 self._launch_busy = False
 
     def request_refresh(self):
+        """Check the native pipe immediately; never capture the RGB strip."""
+        native = self.receiver.snapshot()
+        valid = self._valid_native(native)
         with self._lock:
-            if self._busy:
-                return {"started": False, "reason": "already_running"}
-            game_dir = self._game_dir
-            if not game_dir or not (Path(game_dir) / "Wow.exe").is_file():
-                return {"started": False, "reason": "game_dir_missing"}
-            self._busy = True
-            self._reading_since = time.time()
-            self._error = None
-        thread = threading.Thread(target=self._read_visual, args=(game_dir,),
-                                  daemon=True, name="wow-visual-refresh")
-        thread.start()
-        return {"started": True}
+            self._error = None if valid else (
+                "Brak świeżych danych DLL. Uruchom grę z WoW Connect i wpisz "
+                "/wowmcpnative, aby sprawdzić transmisję.")
+            self._updated_at = time.time()
+        return {"started": True, "available": valid, "source": "native_dll"}
 
-    def _read_visual(self, game_dir):
-        try:
-            import server
-            server.GAME = Path(game_dir).expanduser().resolve()
-            result = server.live_game_data()
-            if not result.get("available"):
-                raise RuntimeError(result.get("reason", "WoW visual read unavailable"))
-            with self._lock:
-                self._visual = result
-                self._demo = None
-                self._updated_at = time.time()
-        except Exception as exc:
-            with self._lock:
-                self._error = str(exc)[:350]
-        finally:
-            with self._lock:
-                self._busy = False
+    @staticmethod
+    def _valid_native(snapshot):
+        data = snapshot.get("data")
+        char = data.get("character") if isinstance(data, dict) else None
+        return bool(
+            snapshot.get("available") is True and
+            snapshot.get("session") != "native-demo" and
+            isinstance(char, dict) and char.get("name") and char.get("name") != "Demo"
+        )
 
-    def show_demo(self):
-        """Explicitly labeled synthetic data for preview only."""
-        now = time.time()
-        demo = {
-            "available": True, "source": "demo",
-            "data": {
-                "captured_at": now,
-                "character": {
-                    "name": "Postać demonstracyjna", "realm": "DEMO / Offline",
-                    "class": "MAGE", "race": "HUMAN", "level": 32,
-                    "health": 1450, "health_max": 1890, "power": 850,
-                    "power_max": 1200, "xp": 33500, "xp_max": 47000,
-                    "money_copper": 125460,
-                },
-                "location": {"zone": "Stranglethorn Vale", "subzone": "Booty Bay"},
-                "quests": [
-                    {"title": "Przykładowe zadanie — zbierz przedmioty",
-                     "level": 31, "ready_to_turn_in": False,
-                     "objectives": [{"text": "Zebrano 6 / 10 przedmiotów", "done": False}]},
-                    {"title": "Przykładowe zadanie — wróć do NPC",
-                     "level": 30, "ready_to_turn_in": True, "objectives": []},
-                ],
-                "bags": [{"id": 117, "name": "Tough Jerky", "count": 4}],
-                "equipment": [{"id": 35, "name": "Przykładowy miecz", "count": 1}],
-            },
-        }
+    def record_mcp_activity(self):
+        """Record local MCP bridge access, not a verified ChatGPT cloud session."""
         with self._lock:
-            self._demo = demo
-        return {"demo": True}
+            self._mcp_last_seen = time.time()
+            self._mcp_calls += 1
+        return {"recorded": True}
 
     def _cached_game_running(self, game_dir):
         """Return cached state instantly and refresh the process check in the background."""
@@ -267,49 +231,48 @@ class DesktopState:
 
     def dashboard(self):
         with self._lock:
-            visual = self._visual
-            demo = self._demo
-            busy = self._busy
             error = self._error
             game_dir = self._game_dir
             last_read = self._updated_at
+            mcp_last_seen = self._mcp_last_seen
+            mcp_calls = self._mcp_calls
             launch = {"status": self._launch_state,
                       "busy": self._launch_busy,
                       "message": self._launch_message,
                       "backup": self._addon_backup}
         native = self.receiver.snapshot()
-        active = select_snapshot(native, visual)
-        if not active.get("available") and demo is not None:
-            active = demo
-        data = metrics(active) if active.get("available") else metrics({})
-        source = source_label(active)
-        if active.get("source") == "demo":
-            source = "DEMO · dane demonstracyjne"
-        transport = self.receiver.status()
+        valid = self._valid_native(native)
+        active = native if valid else {"available": False, "source": "native_dll", "data": None}
+        data = metrics(active) if valid else metrics({})
         native_files = inspect_native_runtime(game_dir)
         native_files["bundled"] = native_bundle_ready()
         game_installed = bool(game_dir and (Path(game_dir) / "Wow.exe").is_file())
+        seen_age = max(0, time.time() - mcp_last_seen) if mcp_last_seen else None
         return {
-            "available": bool(active.get("available")),
-            "source": active.get("source"),
-            "source_label": source,
-            "demo": active.get("source") == "demo" or
-                    (active.get("source") == "experimental native DLL named pipe" and
-                     data["name"] == "Demo"),
-            "data": active.get("data") if active.get("available") else None,
+            "available": valid,
+            "source": native.get("source") if valid else "native_dll",
+            "source_label": source_label(active),
+            "demo": False,
+            "data": native.get("data") if valid else None,
             "metrics": {key: value for key, value in data.items() if key not in
                         ("quests", "bags", "equipment")},
-            "read_in_progress": busy,
-            "last_visual_read": last_read,
+            "read_in_progress": False,
+            "last_visual_read": None,
             "error": error,
             "game": {"installed": game_installed,
                      "running": self._cached_game_running(game_dir),
                      "directory": game_dir,
                      "addon_installed": bool(game_installed and addon_installed(game_dir))},
             "launch": launch,
-            "launch_mode": self._launch_mode,
-            "transport": transport,
+            "launch_mode": "native",
+            "transport": self.receiver.status(),
             "native_setup": native_files,
+            "mcp_client": {
+                "recent": seen_age is not None and seen_age < 90,
+                "last_seen_seconds": round(seen_age, 1) if seen_age is not None else None,
+                "requests": mcp_calls,
+                "note": "Aktywność lokalnego klienta MCP, nie potwierdzenie połączenia z ChatGPT.",
+            },
         }
 
 
