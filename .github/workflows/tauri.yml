@@ -6,6 +6,8 @@ on:
     paths:
       - "desktop-next/**"
       - "desktop_service.py"
+      - "native_mcp_stdio.py"
+      - "server.py"
       - "game_launcher.py"
       - "WoWMCPData/**"
       - "native_bridge/**"
@@ -13,6 +15,7 @@ on:
       - "tests/test_desktop_service.py"
       - "tests/test_game_launcher.py"
       - "tests/test_native_setup.py"
+      - "tests/test_native_mcp_stdio.py"
       - ".github/workflows/tauri.yml"
   pull_request:
     paths:
@@ -99,6 +102,17 @@ jobs:
           pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
           New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries | Out-Null
           Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
+      - name: Build standalone native MCP client bridge
+        run: |
+          pyinstaller --clean --noconfirm --onefile --console --name wow-mcp-stdio native_mcp_stdio.py
+          Copy-Item dist/wow-mcp-stdio.exe desktop-next/src-tauri/binaries/wow-mcp-stdio-x86_64-pc-windows-msvc.exe
+      - name: Upload standalone MCP bridge
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW-MCP-Native-STDIO-Windows
+          path: dist/wow-mcp-stdio.exe
+          if-no-files-found: error
+          retention-days: 30
       - name: Prepare Tauri icons
         run: python desktop-next/scripts/generate_icons.py
       - name: Install frontend packages
