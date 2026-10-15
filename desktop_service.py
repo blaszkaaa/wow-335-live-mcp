@@ -13,6 +13,7 @@ import time
 from game_launcher import addon_installed, install_addon, launch_wow
 from native_bridge.hub import NativeHubServer, DISCOVERY_FILE
 from native_bridge.pipe import NativePipeReceiver
+from native_bridge.diagnostics import inspect_native_runtime
 from ui_models import metrics, select_snapshot, source_label
 
 SETTINGS_FILE = DISCOVERY_FILE.parent / "settings.json"
@@ -254,6 +255,7 @@ class DesktopState:
         if active.get("source") == "demo":
             source = "DEMO · dane demonstracyjne"
         transport = self.receiver.status()
+        native_files = inspect_native_runtime(game_dir)
         game_installed = bool(game_dir and (Path(game_dir) / "Wow.exe").is_file())
         return {
             "available": bool(active.get("available")),
@@ -274,6 +276,7 @@ class DesktopState:
                      "addon_installed": bool(game_installed and addon_installed(game_dir))},
             "launch": launch,
             "transport": transport,
+            "native_setup": native_files,
         }
 
 
