@@ -10,11 +10,10 @@ on:
       - "server.py"
       - "game_launcher.py"
       - "WoWMCPData/**"
-      - "native_bridge/**"
+      - "native_bridge/hub.py"
       - "ui_models.py"
       - "tests/test_desktop_service.py"
       - "tests/test_game_launcher.py"
-      - "tests/test_native_setup.py"
       - "tests/test_native_mcp_stdio.py"
       - ".github/workflows/tauri.yml"
   pull_request:
@@ -52,59 +51,14 @@ jobs:
           python -m pip install "pyinstaller>=6,<7"
       - name: Test Python service and legacy MCP
         run: python -m unittest discover -s tests -v
-      - name: Build pinned Win32 native adapter
-        shell: pwsh
-        run: ./native_bridge/adapter/build-offline.ps1
-      - name: Prepare pinned native runtime bundle
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $url = "https://github.com/brues-code/LichLoader/releases/download/v1.1.0/LichLoader-v1.1.0.zip"
-          $expected = "363df95e1dca2237211dab197e06320e8a6dabd33b83c70bc182d6baf4167d8b"
-          $archive = Join-Path $env:RUNNER_TEMP "LichLoader-v1.1.0.zip"
-          Invoke-WebRequest -Uri $url -OutFile $archive
-          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected) { throw "Pinned LichLoader archive checksum mismatch" }
-          $extract = Join-Path $env:RUNNER_TEMP "lichloader-release"
-          Expand-Archive -Path $archive -DestinationPath $extract
-          New-Item -ItemType Directory -Force native_runtime | Out-Null
-          foreach ($file in @("LichLoader.exe", "LichCore.dll")) {
-            $hits = @(Get-ChildItem $extract -Recurse -File -Filter $file)
-            if ($hits.Count -ne 1) { throw "Expected one $file in verified release" }
-            Copy-Item $hits[0].FullName "native_runtime/$file"
-          }
-          Copy-Item "build/wowmcp-native-lua/build/Release/WrathClassicAPI.dll" "native_runtime/WoWMCPNativeLua.dll"
-          foreach ($file in @("LichLoader.exe", "LichCore.dll", "WoWMCPNativeLua.dll")) {
-            if (-not (Test-Path "native_runtime/$file")) { throw "Missing $file" }
-          }
-      - name: Archive corresponding source for modified GPL DLL
-        shell: pwsh
-        run: |
-          $source = "build/wowmcp-native-lua/WrathClassicAPI"
-          $out = "build/native-corresponding-source"
-          New-Item -ItemType Directory -Path $out -Force | Out-Null
-          foreach ($file in @("src", "cmake", "AddOns", "external", "CMakeLists.txt", "LICENSE", ".gitmodules")) {
-            Copy-Item "$source/$file" "$out/" -Recurse -Force
-          }
-          Copy-Item "native_bridge/adapter/build-offline.ps1" "$out/build-offline.ps1"
-          Copy-Item "native_bridge/adapter/README.md" "$out/ADAPTER-README.md"
-          Copy-Item "WoWMCPData/WoWMCPData.lua" "$out/WoWMCPData.lua"
-          Compress-Archive -Path "$out/*" -DestinationPath "WoWMCP-Native-Corresponding-Source.zip" -CompressionLevel Optimal -Force
-      - name: Upload corresponding source
-        uses: actions/upload-artifact@v4
-        with:
-          name: WoWMCP-Native-Corresponding-Source
-          path: WoWMCP-Native-Corresponding-Source.zip
-          if-no-files-found: error
-          retention-days: 30
       - name: Package background service
         run: |
-          pyinstaller --clean --noconfirm --onefile --windowed --add-data "WoWMCPData;WoWMCPData" --add-data "native_runtime;native_runtime" --name wow-mcp-service desktop_service.py
+          pyinstaller --clean --noconfirm --onefile --windowed --hidden-import server --add-data "WoWMCPData;WoWMCPData" --name wow-mcp-service desktop_service.py
           New-Item -ItemType Directory -Force desktop-next/src-tauri/binaries | Out-Null
           Copy-Item dist/wow-mcp-service.exe desktop-next/src-tauri/binaries/wow-mcp-service-x86_64-pc-windows-msvc.exe
-      - name: Build standalone native MCP client bridge
+      - name: Build standalone addon MCP client bridge
         run: |
-          pyinstaller --clean --noconfirm --onefile --console --name wow-mcp-stdio native_mcp_stdio.py
+          pyinstaller --clean --noconfirm --onefile --console --hidden-import server --add-data "WoWMCPData;WoWMCPData" --name wow-mcp-stdio native_mcp_stdio.py
           Copy-Item dist/wow-mcp-stdio.exe desktop-next/src-tauri/binaries/wow-mcp-stdio-x86_64-pc-windows-msvc.exe
       - name: Smoke-test packaged MCP stdio protocol
         shell: pwsh
@@ -121,7 +75,7 @@ jobs:
           $handshake = $responses[0] | ConvertFrom-Json
           $catalog = $responses[1] | ConvertFrom-Json
           $snapshot = $responses[2] | ConvertFrom-Json
-          if ($handshake.result.serverInfo.name -ne "wow-335-native-mcp") {
+          if ($handshake.result.serverInfo.name -ne "wow-335-live-mcp") {
             throw "MCP initialize handshake failed"
           }
           if (-not ($catalog.result.tools.name -contains "read_wow_live_data")) {
@@ -133,7 +87,7 @@ jobs:
       - name: Upload standalone MCP bridge
         uses: actions/upload-artifact@v4
         with:
-          name: WoW-MCP-Native-STDIO-Windows
+          name: WoW-MCP-Addon-STDIO-Windows
           path: dist/wow-mcp-stdio.exe
           if-no-files-found: error
           retention-days: 30
