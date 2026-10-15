@@ -1,4 +1,4 @@
-# WoWMCP native Lua adapter (experimental, offline-only)
+# WoWMCP native Lua adapter (experimental)
 
 This implements the missing Lua-to-native publishing function for WoW 3.3.5a
 using the Lua extension registration machinery of WrathClassicAPI:
@@ -67,17 +67,21 @@ your WoW directory. Result:
     build/wowmcp-native-lua/build/Release/WrathClassicAPI.dll
 
 GitHub Actions builds the same module and packages its complete source
-and GPL license in the artifact "WowMCP-Lua-Bridge-OFFLINE-ONLY".
+and GPL license in "WowMCP-Lua-Bridge-OFFLINE-ONLY". The Windows desktop
+installer additionally bundles the built adapter with a pinned, hash-verified
+LichLoader release, and publishes "WoWMCP-Native-Corresponding-Source"
+alongside the installer.
 
-## Manual authorized offline compatibility check
+## Authorized in-game compatibility check
 
-Only use a separate test client/environment where loading native extensions
-is explicitly permitted. Consult the upstream WrathClassicAPI and LichLoader
-documentation for manual setup in that authorized environment. This repo
-deliberately does not deploy, inject or launch modified DLLs inside WoW.
+Only use a client/environment where loading these native extensions is explicitly
+permitted. The WoW Connect desktop app offers opt-in "Przez LichLoader (DLL)" mode:
+it prepares the bundled files in the selected game directory and starts
+LichLoader. No manual copying or editing is required; no anti-cheat bypass is
+implemented. A successful game launch is not proof the adapter is working.
 
-1. Start local MCP with WOW_MCP_NATIVE_BRIDGE=1, or open the Control Center
-   hub. Do not start two simultaneous named-pipe receivers.
+1. Open WoW Connect to start its local receiver. Do not start two simultaneous
+   named-pipe receivers.
 2. In the test client with WoWMCPData and the adapter loaded, run /reload.
 3. Run /wowmcpnative. Verify it reports the last packet sent and its size.
 4. Call wow_native_status and read_wow_native_data in ChatGPT. Inspect
