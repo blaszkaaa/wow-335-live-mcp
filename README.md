@@ -1,17 +1,22 @@
 # WoW 3.3.5a Live MCP
 
-A local, read-only MCP server for **World of Warcraft: Wrath of the Lich King 3.3.5a (build 12340)** on Windows. It pairs an in-game addon with a Python server so an MCP client can request current character data without reading game memory, modifying MPQ files, or controlling the character.
+A local, read-only MCP bridge for **World of Warcraft 3.3.5a (build 12340)** on Windows. WoW Connect 0.6 uses **DLL-only live telemetry** with a modern dark desktop UI. Its in-game WoWMCPData addon collects character and quest information using the official Lua API but **does not draw the former RGB square**.
 
-This project is independent of Blizzard, Warmane, Questie, and WoWpoPolsku. It does not include game files or third-party addons.
+This project is independent of Blizzard, Warmane, Questie, and WoWpoPolsku. It does not bundle the game client.
 
-## How it works
+## Live data path
 
 ```text
-WoW 3.3.5a API -> WoWMCPData addon -> visible color strip -> local screen capture
-                                                       -> Python decoder -> MCP client
+WoW Lua API -> WoWMCPData addon -> WoWMCPNativeLua.dll
+          -> Windows named pipe -> WoW Connect desktop hub
+          -> separately connected MCP stdio client -> ChatGPT (if configured)
 ```
 
-The addon draws a **32 × 16 cell strip** in the lower-left corner. The strip must remain visible and unobstructed for live reads. It cycles through pages, so a request may take a few seconds. Data is refreshed between page cycles. The MCP server reads pixels on demand; it does not poll continuously, inject code, inspect process memory, or send game commands.
+The Windows installer includes a pinned native DLL adapter and LichLoader (for authorized environments). The square/visual-strip decoder remains in legacy source only; **live MCP tools no longer use it**. The installer also packages a standalone `wow-mcp-stdio.exe` bridge, downloadable as a separate GitHub Actions artifact. The bridge automatically discovers the authenticated local hub.
+
+**The DLL and ChatGPT are two distinct connections.** A green DLL indicator means the game is sending data to WoW Connect. A separate MCP indicator records whether a local MCP process has made recent protocol requests; it cannot certify a ChatGPT cloud connection. Existing ChatGPT plugins or private tunnels may need reconnection/update to use this MCP bridge.
+
+[Windows installation and MCP connection instructions](desktop-next/README.md).
 
 ## Available tools
 
@@ -63,8 +68,7 @@ uruchomienie w samym Wow.exe wymaga odrębnego testu i zgody operatora.
 która uruchamia grę i wyświetla podstawowe informacje o postaci, zadaniach
 i stanie połączenia MCP. Opcjonalny tryb DLL można wybrać w ustawieniach.
 
-Tauri uruchamia usługę Python (PyInstaller sidecar), która nadal obsługuje
-MCP, addon i eksperymentalny kanał DLL. Nie trzeba osobno uruchamiać
+Tauri uruchamia usługę Python (PyInstaller sidecar) z odbiornikiem DLL. Osobny program `wow-mcp-stdio.exe` łączy lokalny hub z klientem MCP. Nie trzeba osobno uruchamiać
 starego GUI w Pythonie. Instalator Windows jest budowany przez workflow
 **Tauri Windows Desktop** na GitHub Actions.
 
@@ -72,7 +76,7 @@ Szczegóły i instrukcja: [desktop-next/README.md](desktop-next/README.md).
 
 **Opcjonalny adapter Lua→DLL został zaimplementowany i przechodzi kompilację
 Win32, ale nie został sprawdzony w działającym kliencie ani na Warmane.**
-Odczyt wizualny pozostaje rozwiązaniem domyślnym i zapasowym.
+Odczyt wizualny nie jest już dostępny w bieżącej ścieżce live.
 [Instrukcja testowa native Lua](native_bridge/adapter/README.md).
 
 **Zielony status DLL w WoW Connect oznacza rzeczywiste odebrane pakiety,
@@ -134,7 +138,7 @@ py -3 -m venv .venv
 
 Replace the example game path with the folder containing your `Wow.exe`. The installer backs up any existing `WoWMCPData` folder to `Interface\AddOns-backups` before copying the two addon files. It leaves other addons and character settings alone. You can also copy the `WoWMCPData` folder manually to `Interface\AddOns` and check that `WoWMCPData.toc` sits directly inside it.
 
-On the character selection screen, enable **WoW MCP Data** in **AddOns**. Enter the world or type `/reload` if the game is already open. Keep the small strip visible in the lower-left corner.
+On the character selection screen, enable **WoW MCP Data** in **AddOns**. Enter the world or type `/reload` if the game is already open. The addon no longer displays a color strip; live reads need the DLL and local WoW Connect receiver.
 
 ## Configure an MCP client
 
