@@ -14,6 +14,7 @@ from game_launcher import addon_installed, install_addon, launch_wow
 from native_bridge.hub import NativeHubServer, DISCOVERY_FILE
 from native_bridge.pipe import NativePipeReceiver
 from native_bridge.diagnostics import inspect_native_runtime
+from native_bridge.setup import native_bundle_ready, setup_native_runtime
 from ui_models import metrics, select_snapshot, source_label
 
 SETTINGS_FILE = DISCOVERY_FILE.parent / "settings.json"
@@ -122,9 +123,6 @@ class DesktopState:
             result = install_addon(game_dir)
             with self._lock:
                 self._addon_backup = result.backup
-                self._launch_state = "starting"
-                self._launch_message = ("Uruchamianie przez LichLoader..." if mode == "native"
-                                        else "Uruchamianie Wow.exe...")
             if find_game_running(game_dir):
                 with self._lock:
                     self._launch_state = "already_running"
@@ -139,18 +137,29 @@ class DesktopState:
                     self._game_checked_dir = game_dir
                     self._game_checked_at = time.monotonic()
                     self._game_running = True
-            else:
-                if mode == "native":
-                    launch_wow(game_dir, mode="native")
-                else:
-                    launch_wow(game_dir)
+                return
+            if mode == "native":
                 with self._lock:
-                    self._launch_state = "started"
-                    self._launch_message = (
-                        "Uruchomiono WoW z addonem. Jeśli to pierwsze uruchomienie, "
-                        "włącz WoW MCP Data na ekranie wyboru postaci.")
-                    self._game_checked_at = 0.0
-                    self._game_checked_dir = None
+                    self._launch_state = "installing"
+                    self._launch_message = "Instalowanie składników DLL z pakietu aplikacji..."
+                setup_native_runtime(game_dir)
+            with self._lock:
+                self._launch_state = "starting"
+                self._launch_message = ("Uruchamianie przez LichLoader..." if mode == "native"
+                                        else "Uruchamianie Wow.exe...")
+            if mode == "native":
+                launch_wow(game_dir, mode="native")
+            else:
+                launch_wow(game_dir)
+            with self._lock:
+                self._launch_state = "started"
+                self._launch_message = (
+                    "Uruchomiono WoW z przygotowaną DLL. Oczekiwanie na dane z gry."
+                    if mode == "native" else
+                    "Uruchomiono WoW z addonem. Jeśli to pierwsze uruchomienie, "
+                    "włącz WoW MCP Data na ekranie wyboru postaci.")
+                self._game_checked_at = 0.0
+                self._game_checked_dir = None
         except (OSError, ValueError, RuntimeError) as exc:
             with self._lock:
                 self._launch_state = "error"
@@ -278,6 +287,7 @@ class DesktopState:
             source = "DEMO · dane demonstracyjne"
         transport = self.receiver.status()
         native_files = inspect_native_runtime(game_dir)
+        native_files["bundled"] = native_bundle_ready()
         game_installed = bool(game_dir and (Path(game_dir) / "Wow.exe").is_file())
         return {
             "available": bool(active.get("available")),
