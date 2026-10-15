@@ -17,7 +17,7 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertFalse(data["available"])
             self.assertFalse(data["game"]["installed"])
             self.assertEqual(data["metrics"]["quest_count"], 0)
-            self.assertFalse(state.request_refresh()["available"])
+            self.assertEqual(state.request_refresh()["reason"], "game_dir_missing")
 
     def test_synthetic_native_packets_are_never_reported_as_connected(self):
         with tempfile.TemporaryDirectory() as tmp:
