@@ -1,4 +1,8 @@
-local addon = CreateFrame("Frame")
+local addon = CreateFrame("Frame", nil, UIParent)
+-- Transparent one-pixel ticker: stays visible so OnUpdate runs, draws no pixels.
+addon:SetSize(1, 1)
+addon:EnableMouse(false)
+addon:Show()
 local export = {}
 local WIRE_FIELDS = "captured_at,character,location,target,pet,quests,quest_log,bags,equipment,spells,actions,skills,stats,talents,group,buffs,debuffs,interaction,combat_summary,name,id,level,title,complete,ready_to_turn_in,failed,daily,watched,suggested_group,objectives,text,kind,done,count,slot,bag,rank,tab,health,health_max,power,power_max,money_copper,price_copper,status,npc,items,services,available_quests,active_quests,options,spell,damage_done,damage_taken,healing_done,healing_taken,deaths,casts,misses,duration,active,stock"
 local WIRE_TOKENS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
