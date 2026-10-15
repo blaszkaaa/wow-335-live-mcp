@@ -60,12 +60,12 @@ class NativeLuaFrameTests(unittest.TestCase):
             self.assertFalse(server.read_best_wow_live_data()["available"])
             visual.assert_called_once()
 
-    def test_native_requires_explicit_opt_in(self):
+    def test_desktop_native_discovery_does_not_require_environment_flag(self):
         with mock.patch.dict("os.environ", {"WOW_MCP_NATIVE_BRIDGE": ""}), \
-             mock.patch.object(server, "read_wow_native_data") as native, \
+             mock.patch.object(server, "read_wow_native_data", return_value={"available": False}) as native, \
              mock.patch.object(server, "live_game_data", return_value={"available": False}):
             server.read_best_wow_live_data()
-            native.assert_not_called()
+            native.assert_called_once_with()
 
 
 if __name__ == "__main__":
