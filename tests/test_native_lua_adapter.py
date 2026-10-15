@@ -25,6 +25,17 @@ class NativeLuaFrameTests(unittest.TestCase):
             },
         }).encode("utf-8")
 
+    def test_addon_keeps_native_stream_but_draws_no_rgb_square(self):
+        from pathlib import Path
+        code = (Path(__file__).resolve().parents[1] / "WoWMCPData" /
+                "WoWMCPData.lua").read_text(encoding="utf-8")
+        self.assertIn("WoWMCP.Publish", code)
+        self.assertIn('addon:SetScript("OnUpdate"', code)
+        self.assertIn("publish_native()", code)
+        self.assertNotIn("CreateTexture(", code)
+        self.assertNotIn("render_page()", code)
+        self.assertNotIn("WoWMCPDataPanel", code)
+
     def test_full_native_lua_snapshot_is_preserved(self):
         data = NativeState()
         self.assertTrue(data.ingest(self.native_frame()))
