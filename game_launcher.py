@@ -94,10 +94,23 @@ def install_addon(game, source=None):
                               backup=str(backup) if backup else None)
 
 
-def launch_wow(game, process_factory=subprocess.Popen):
-    """Start the selected game's own Wow.exe, without any DLL loader."""
+def launch_wow(game, process_factory=subprocess.Popen, mode="addon"):
+    """Start Wow.exe normally, or an explicitly selected preinstalled launcher.
+
+    Native mode never modifies the game or loads a library itself. It requires
+    an existing, separately installed and user-authorized loader configuration.
+    """
     directory = validate_game_directory(str(game))
-    executable = directory / "Wow.exe"
+    if mode not in ("addon", "native"):
+        raise ValueError("Nieznany tryb uruchamiania gry.")
+    if mode == "native":
+        from native_bridge.diagnostics import inspect_native_runtime
+        readiness = inspect_native_runtime(directory)
+        if not readiness["ready"]:
+            raise RuntimeError(readiness["reason"])
+        executable = directory / "LichLoader.exe"
+    else:
+        executable = directory / "Wow.exe"
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     return process_factory([str(executable)], cwd=str(directory),
                            close_fds=True, creationflags=flags)
