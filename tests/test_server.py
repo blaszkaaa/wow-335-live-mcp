@@ -86,6 +86,45 @@ class McpTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "WOW_GAME_DIR"):
                 server.require_game_dir()
 
+    def test_uses_desktop_game_directory_when_env_is_missing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            game = Path(temporary)
+            (game / "Wow.exe").touch()
+            hub = mock.Mock()
+            hub.settings.return_value = {"game_dir": str(game)}
+            with mock.patch.object(server, "GAME", None), mock.patch.object(
+                    server.NativeHubClient, "discover", return_value=hub):
+                self.assertEqual(server.require_game_dir(), game.resolve())
+
+    def test_native_hub_is_available_without_env_flags(self):
+        hub = mock.Mock()
+        hub.status.return_value = {"available": True, "accepted_frames": 1}
+        hub.snapshot.return_value = {
+            "available": True, "session": "real-game-1",
+            "data": {"character": {"name": "Hunter", "level": 18}, "quests": []},
+        }
+        with mock.patch.object(server.NativeHubClient, "discover", return_value=hub):
+            with mock.patch.dict(server.os.environ, {}, clear=True):
+                with mock.patch.object(server, "live_game_data", side_effect=AssertionError(
+                        "Visual fallback must not run for valid native telemetry")):
+                    result = server.read_best_wow_live_data()
+                    self.assertEqual(result["data"]["character"]["name"], "Hunter")
+                    self.assertEqual(result["transport"], "desktop_gui_hub")
+                    self.assertTrue(server.wow_native_status()["available"])
+
+    def test_demo_native_packets_do_not_replace_real_game_read(self):
+        hub = mock.Mock()
+        hub.snapshot.return_value = {
+            "available": True, "session": "native-demo",
+            "data": {"character": {"name": "Demo"}},
+        }
+        visual = {"available": True, "source": "WoW addon visual data strip",
+                  "data": {"character": {"name": "My Real Character"}}}
+        with mock.patch.object(server.NativeHubClient, "discover", return_value=hub):
+            with mock.patch.object(server, "live_game_data", return_value=visual) as capture:
+                self.assertEqual(server.read_best_wow_live_data(), visual)
+                capture.assert_called_once_with()
+
     def test_status_uses_configured_game_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             game = Path(temporary)
