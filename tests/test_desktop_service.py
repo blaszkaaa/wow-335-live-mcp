@@ -19,11 +19,14 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertEqual(data["metrics"]["quest_count"], 0)
             self.assertFalse(state.request_refresh()["available"])
 
-    def test_synthetic_preview_is_never_reported_as_connected(self):
+    def test_synthetic_native_packets_are_never_reported_as_connected(self):
         with tempfile.TemporaryDirectory() as tmp:
-            state = DesktopState(NativePipeReceiver(), Path(tmp) / "settings.json")
-            state.show_demo()
-            data = state.dashboard()
+            receiver = NativePipeReceiver()
+            state = DesktopState(receiver, Path(tmp) / "settings.json")
+            fake = {"available": True, "session": "native-demo",
+                    "data": {"character": {"name": "Demo"}}}
+            with patch.object(receiver, "snapshot", return_value=fake):
+                data = state.dashboard()
             self.assertFalse(data["available"])
             self.assertFalse(data["demo"])
             self.assertIsNone(data["data"])
@@ -103,9 +106,8 @@ class DesktopServiceTests(unittest.TestCase):
             try:
                 client = NativeHubClient.discover(Path(tmp) / "control.json")
                 self.assertFalse(client._get("/v2/dashboard")["available"])
-                response = client._post("/v2/demo", {})
-                self.assertTrue(response["demo"])
-                self.assertTrue(client._get("/v2/dashboard")["demo"])
+                self.assertIsNone(client._post("/v2/demo", {}))
+                self.assertFalse(client._get("/v2/dashboard")["available"])
                 self.assertEqual(client._get("/v2/settings")["game_dir"], "")
                 self.assertIsNone(NativeHubClient(client.port, "x" * 64)._post("/v2/demo", {}))
                 self.assertFalse(state.dashboard()["mcp_client"]["recent"])
