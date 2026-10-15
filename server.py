@@ -447,80 +447,25 @@ _NATIVE_RECEIVER = None
 
 
 def wow_native_status():
-    # The desktop app already owns the pipe and advertises a local authenticated
-    # hub. It must be usable by MCP without environment variables; otherwise
-    # the interface appears connected while ChatGPT silently ignores its data.
-    hub = NativeHubClient.discover()
-    if hub is not None:
-        remote = hub.status()
-        if remote is not None:
-            return {**remote, "transport": "desktop_gui_hub"}
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
-        return {"available": False, "enabled": False,
-                "reason": "Start WoW Connect or opt in with WOW_MCP_NATIVE_BRIDGE=1."}
-    if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
-        return {"available": False, "enabled": True,
-                "reason": "Desktop hub unavailable; start WoW Connect."}
-    if _NATIVE_RECEIVER is None:
-        return {"available": False, "enabled": False,
-                "reason": "Native receiver not started."}
-    return _NATIVE_RECEIVER.status()
+    return {"available": False, "enabled": False,
+            "reason": "Tryb DLL jest wyłączony. Odczyt działa przez addon RGB."}
 
 
 def read_wow_native_data():
-    # Prefer the desktop hub even if the MCP environment was not configured
-    # with the experimental native bridge flag.
-    hub = NativeHubClient.discover()
-    if hub is not None:
-        remote = hub.snapshot()
-        if remote is not None:
-            return {**remote, "transport": "desktop_gui_hub"}
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") != "1":
-        return {"available": False, "enabled": False, "data": None,
-                "reason": "Start WoW Connect or opt in with WOW_MCP_NATIVE_BRIDGE=1."}
-    if os.environ.get("WOW_MCP_NATIVE_HUB") == "1":
-        return {"available": False, "enabled": True, "data": None,
-                "reason": "Desktop hub unavailable; start WoW Connect."}
-    if _NATIVE_RECEIVER is None:
-        return {"available": False, "enabled": False, "data": None,
-                "reason": "Native receiver not started."}
-    return _NATIVE_RECEIVER.snapshot()
+    return {"available": False, "enabled": False, "data": None,
+            "reason": "Tryb DLL jest wyłączony. Użyj read_wow_live_data."}
 
 
 def read_best_wow_live_data():
-    """Read only fresh actual game snapshots from the DLL named-pipe hub.
-
-    The old RGB screenshot transport is intentionally disabled. A running
-    desktop UI does not guarantee this separate MCP process is connected;
-    failures must be explicit instead of silently returning a saved snapshot.
-    """
-    native = read_wow_native_data()
-    data = native.get("data")
-    character = data.get("character") if isinstance(data, dict) else None
-    valid = (
-        native.get("available") is True and
-        native.get("session") != "native-demo" and
-        isinstance(character, dict) and bool(character.get("name")) and
-        character.get("name") != "Demo"
-    )
-    if valid:
-        return native
-    return {
-        "available": False, "source": "native_dll", "data": None,
-        "age_seconds": native.get("age_seconds"),
-        "transport": native.get("transport"),
-        "reason": native.get("reason") or
-                  "Brak świeżych danych z DLL. Uruchom WoW Connect oraz grę przez "
-                  "LichLoader i sprawdź /wowmcpnative. MCP potrzebuje osobnego "
-                  "połączenia z ChatGPT.",
-    }
+    """Decode the lower-left WoWMCPData visual panel, without using any DLL."""
+    return live_game_data()
 
 
 TOOLS = [
     {"name": "wow_status", "description": "Check whether the local WoW 3.3.5a window is ready for an on-demand screenshot. Read-only.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
-    {"name": "wow_native_status", "description": "Local native DLL receiver status. Uses authenticated WoW Connect hub automatically when reachable; no separate environment flags are required.",
+    {"name": "wow_native_status", "description": "Legacy status: DLL transport disabled. WoWMCPData visual strip is the active source.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
     {"name": "read_wow_native_data", "description": "Read the most recent validated snapshot from an experimental local DLL pipe. Unavailable if the receiver is disabled or the frame is stale (>30s). Optional native Lua adapter requires explicit separate game-side installation and testing.",
@@ -538,7 +483,7 @@ TOOLS = [
     {"name": "read_wow_combat_log", "description": "Read the latest raw WoW combat-log lines if /combatlog is enabled in game. Report file age; a missing or old file is not live combat data.",
      "inputSchema": {"type": "object", "properties": {"max_lines": {"type": "integer", "minimum": 1, "maximum": 100}}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
-    {"name": "read_wow_live_data", "description": "Read live character stats, quests, bags, spells, talents and interaction data exclusively from fresh, validated WoW Connect native DLL telemetry. No screen capture or RGB visual fallback. If the native hub cannot be reached, report an explicit unavailable state and instruct how to reconnect MCP.",
+    {"name": "read_wow_live_data", "description": "Read current WoW 3.3.5a data by decoding the WoWMCPData 32x16 colored rectangle in the bottom-left of the game screen. On-demand screenshot only, no DLL or game injection. Reports age, character, quests, bags, equipment, abilities and talents.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
      "annotations": {"readOnlyHint": True, "destructiveHint": False}},
 ]
@@ -556,7 +501,7 @@ def reply(req):
     try:
         if method == "initialize":
             result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
-                      "serverInfo": {"name": "wow-335-live-mcp", "version": "0.6.0"}}
+                      "serverInfo": {"name": "wow-335-live-mcp", "version": "0.7.0"}}
         elif method == "ping":
             result = {}
         elif method == "tools/list":
@@ -591,12 +536,7 @@ def reply(req):
 
 
 def main():
-    global _NATIVE_RECEIVER
-    if os.environ.get("WOW_MCP_NATIVE_BRIDGE") == "1" and os.environ.get("WOW_MCP_NATIVE_HUB") != "1":
-        hub = NativeHubClient.discover()
-        if hub is None or hub.status() is None:
-            _NATIVE_RECEIVER = NativePipeReceiver()
-            _NATIVE_RECEIVER.start()
+    # Pure stdio MCP: don't open a DLL pipe or inject a game module.
     for line in sys.stdin:
         try:
             response = reply(json.loads(line))
