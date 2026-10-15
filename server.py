@@ -549,6 +549,10 @@ def reply(req):
     request_id = req.get("id")
     if request_id is None:
         return None
+    if method in ("initialize", "tools/list", "tools/call"):
+        hub = NativeHubClient.discover()
+        if hub is not None:
+            hub.announce_mcp()
     try:
         if method == "initialize":
             result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
