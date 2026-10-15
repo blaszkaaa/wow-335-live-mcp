@@ -63,6 +63,11 @@ class NativeHubClient:
         """Read the configured WoW path from the authenticated desktop service."""
         return self._get("/v2/settings")
 
+    def announce_mcp(self):
+        """Mark a real MCP protocol request as seen by the local desktop hub."""
+        return self._post("/v2/mcp-activity", {})
+
+
 
 class NativeHubServer:
     def __init__(self, receiver, discovery_file=DISCOVERY_FILE, dashboard=None):
@@ -131,6 +136,8 @@ class NativeHubServer:
                         payload = hub.dashboard.show_demo()
                     elif self.path == "/v2/settings":
                         payload = hub.dashboard.set_settings(body)
+                    elif self.path == "/v2/mcp-activity" and not body:
+                        payload = hub.dashboard.record_mcp_activity()
                     else:
                         self.send_error(404)
                         return
